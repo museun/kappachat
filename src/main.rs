@@ -3,9 +3,7 @@
 use std::time::Instant;
 
 use eframe::NativeOptions;
-use egui::{
-    text::LayoutJob, CentralPanel, Color32, Event, Key, TextEdit, TextFormat, TextStyle, Widget,
-};
+use egui::{text::LayoutJob, CentralPanel, Color32, Event, TextFormat, TextStyle, Widget};
 use egui_extras::RetainedImage;
 
 pub struct App {
@@ -208,8 +206,8 @@ impl App {
         let id = TextStyle::Body.resolve(&*self.context.style());
         let mut layout = LayoutJob::simple_singleline(prefix.to_string(), id.clone(), Color32::RED);
         layout.append(msg.as_ref(), 5.0, TextFormat::simple(id, Color32::GRAY));
-        let msg = layout;
 
+        let msg = layout;
         self.report_error(Line::Status { msg })
     }
 
@@ -288,7 +286,7 @@ impl App {
     }
 
     fn toggle_line_mode(&mut self) {
-        self.tabs.active_mut().next_line_mode();
+        self.tabs.active_mut().next_line_mode()
     }
 
     fn toggle_timestamps(&mut self) {
@@ -355,11 +353,6 @@ impl App {
         }
     }
 }
-
-mod state;
-use state::SettingsState;
-
-mod widgets;
 
 impl App {
     fn try_display_help(&mut self, ctx: &egui::Context) {
@@ -486,6 +479,11 @@ impl RequestPaint for egui::Context {
 
 pub struct NoopRepaint;
 impl RequestPaint for NoopRepaint {}
+
+mod state;
+use state::SettingsState;
+
+mod widgets;
 
 mod action;
 
