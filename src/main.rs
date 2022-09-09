@@ -4,9 +4,9 @@ use std::time::Instant;
 
 use eframe::NativeOptions;
 use egui::{
-    text::LayoutJob, Align, CentralPanel, Color32, ComboBox, Event, Grid, Key, Layout, TextEdit,
-    TextFormat, TextStyle, Vec2, Widget,
+    text::LayoutJob, CentralPanel, Color32, Event, Key, TextEdit, TextFormat, TextStyle, Widget,
 };
+use egui_extras::RetainedImage;
 
 struct App {
     interaction: Interaction,
@@ -271,6 +271,8 @@ impl App {
             Command::Invalid { raw } => {
                 self.create_error("invalid command:", raw);
             }
+
+            Command::Nothing => {}
         }
     }
 
@@ -357,326 +359,36 @@ use state::SettingsState;
 mod widgets;
 
 impl App {
-    fn display_twitch_autojoin(&mut self, ui: &mut egui::Ui) {
-        ui.vertical(|ui| {
-            ui.group(|ui| {
-                ui.horizontal(|ui| {
-                    ui.label("Channels");
-
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        if self.settings_state.adding_channel.is_some() {
-                            if ui.small_button("❌").clicked() {
-                                self.settings_state.adding_channel.take();
-                            }
-                        }
-
-                        if let Some(str) = &mut self.settings_state.adding_channel {
-                            let resp = ui.add(TextEdit::singleline(str).lock_focus(true));
-                            self.settings_state.adding_channel_id.replace(resp.id);
-
-                            if resp.lost_focus() && ui.ctx().input().key_pressed(Key::Enter) {
-                                if let Some(channel) =
-                                    std::mem::take(&mut self.settings_state.adding_channel)
-                                {
-                                    let channel = channel.trim();
-
-                                    // TODO report errors so we can bail
-                                    if channel.contains(' ') {
-                                        eprintln!("'{channel}' cannot contain spaces");
-                                    } else {
-                                        let channel = if channel.starts_with('#') {
-                                            channel.to_string()
-                                        } else {
-                                            format!("#{channel}")
-                                        };
-
-                                        if self
-                                            .settings_state
-                                            .channels
-                                            .iter()
-                                            .any(|c| c == &channel)
-                                        {
-                                            eprintln!("duplicate: {channel}")
-                                        } else {
-                                            self.settings_state.channels.push(channel)
-                                        }
-                                    }
-                                    self.settings_state.adding_channel_id.take();
-                                }
-                            }
-                        }
-
-                        if self.settings_state.adding_channel.is_none() {
-                            if ui.small_button("➕").clicked() {
-                                self.settings_state.adding_channel.replace(String::new());
-                                if let Some(id) = self.settings_state.adding_channel_id {
-                                    ui.ctx().memory().request_focus(id);
-                                }
-                            }
-                        }
-                    });
-                });
-
-                ui.separator();
-                Grid::new("twitch_channels")
-                    .num_columns(2)
-                    .striped(true)
-                    .show(ui, |ui| {
-                        for channel in &self.settings_state.channels {
-                            ui.monospace(channel);
-
-                            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                if ui.small_button("❌").clicked() {
-                                    self.settings_state.channels_to_remove.push(channel.clone());
-                                }
-                            });
-                            ui.end_row()
-                        }
-                    })
-            });
-        });
-
-        for channel in self.settings_state.channels_to_remove.drain(..) {
-            if let Some(pos) = self
-                .settings_state
-                .channels
-                .iter()
-                .position(|c| c == &channel)
-            {
-                self.settings_state.channels.remove(pos);
-            }
-        }
-    }
-
-    fn display_twitch_settings(&mut self, ui: &mut egui::Ui) {
-        Grid::new("twitch_settings")
-            .num_columns(2)
-            .striped(true)
-            .show(ui, |ui| {
-                for (left, right, password) in [
-                    ("Name", &mut self.config.twitch_name, false),
-                    ("OAuth Token", &mut self.config.twitch_oauth_token, true),
-                    ("Client-Id", &mut self.config.twitch_client_id, false),
-                    ("Client-Secret", &mut self.config.twitch_client_secret, true),
-                ] {
-                    ui.monospace(left);
-                    ui.horizontal(|ui| {
-                        // TODO make this into a custom widget, embed the button
-                        if ui
-                            .add(TextEdit::singleline(right).password({
-                                self.settings_state
-                                    .twitch_visible
-                                    .get(&SettingsState::make_hash(left))
-                                    .copied()
-                                    .unwrap_or(password)
-                            }))
-                            .lost_focus()
-                            && ui.ctx().input().key_pressed(Key::Enter)
-                        {}
-                        if password {
-                            let down = ui.small_button("🔎").is_pointer_button_down_on();
-                            *self
-                                .settings_state
-                                .twitch_visible
-                                .entry(SettingsState::make_hash(left))
-                                .or_insert(true) = !down;
-                        }
-                    });
-
-                    ui.end_row()
-                }
-            });
-    }
-
-    fn display_key_bindings(&mut self, ui: &mut egui::Ui) {
-        widgets::HelpWidget::new(&mut self.key_mapping).ui(ui);
-    }
-
-    fn display_channel_settings(&mut self, ui: &mut egui::Ui) {
-        ui.group(|ui| {
-            ui.vertical(|ui| {
-                ui.label("channels");
-                ui.separator();
-
-                for tab in self.tabs.tabs_mut() {
-                    ui.horizontal(|ui| {
-                        ui.monospace(tab.title());
-
-                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            ui.checkbox(&mut false, "save");
-                            ui.checkbox(tab.showing_user_list_mut(), "user list");
-                            ui.checkbox(tab.showing_timestamp_mut(), "timestamp");
-                        });
-                    });
-                }
-            })
-        });
-    }
-
-    fn display_display_settings(&mut self, ui: &mut egui::Ui) {
-        ui.group(|ui| {
-            ui.vertical(|ui| {
-                ui.label("display");
-                ui.separator();
-
-                Grid::new("display_settings_grid")
-                    .num_columns(2)
-                    .striped(true)
-                    .show(ui, |ui| {
-                        ui.monospace("pixels per point");
-                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            ComboBox::from_id_source("pixels_per_point")
-                                .selected_text(SettingsState::dpi_repr(
-                                    self.settings_state.pixels_per_point,
-                                ))
-                                .show_ui(ui, |ui| {
-                                    for n in SettingsState::dpi_range() {
-                                        ui.selectable_value(
-                                            &mut self.settings_state.pixels_per_point,
-                                            n,
-                                            SettingsState::dpi_repr(n),
-                                        );
-                                    }
-                                });
-                        });
-
-                        ui.end_row();
-
-                        let ppp = self.settings_state.pixels_per_point;
-                        if ui.ctx().pixels_per_point() != ppp {
-                            ui.ctx().set_pixels_per_point(ppp);
-                        }
-
-                        ui.monospace("show tab bar");
-                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            ui.checkbox(&mut self.showing_tab_bar, "");
-                        });
-                        ui.end_row();
-                    })
-            });
-        });
-    }
-
-    fn display_settings(&mut self, ui: &mut egui::Ui) {
-        ui.vertical(|ui| {
-            self.display_display_settings(ui);
-            self.display_channel_settings(ui);
-        });
-    }
-
-    fn display_help(&mut self, ctx: &egui::Context) {
-        if let Some(resp) = egui::Window::new("Help")
-            .title_bar(false)
-            .resizable(false)
-            .vscroll(true)
-            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-            .show(ctx, |ui| {
-                // tab bar
-                let resp = ui
-                    .horizontal(|ui| {
-                        ui.selectable_value(
-                            &mut self.showing_help,
-                            widgets::HelpView::KeyBindings,
-                            "Key Bindings",
-                        );
-                        ui.selectable_value(
-                            &mut self.showing_help,
-                            widgets::HelpView::Settings,
-                            "Settings",
-                        );
-                        ui.selectable_value(
-                            &mut self.showing_help,
-                            widgets::HelpView::Twitch,
-                            "Twitch",
-                        );
-                        ui.selectable_value(
-                            &mut self.showing_help,
-                            widgets::HelpView::Autojoin,
-                            "Autojoin",
-                        );
-
-                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            ui.button("close").clicked()
-                        })
-                        .inner
-                    })
-                    .inner;
-
-                ui.separator();
-
-                match self.showing_help {
-                    widgets::HelpView::KeyBindings => {
-                        self.display_key_bindings(ui);
-                    }
-
-                    widgets::HelpView::Settings => {
-                        self.display_settings(ui);
-                    }
-
-                    widgets::HelpView::Twitch => {
-                        self.display_twitch_settings(ui);
-                    }
-
-                    widgets::HelpView::Autojoin => {
-                        self.display_twitch_autojoin(ui);
-                    }
-
-                    _ => {}
-                }
-
-                resp
-            })
-        {
-            match resp.inner {
-                Some(true) => self.toggle_help(),
-                _ if ctx.input().key_pressed(Key::Escape) => self.toggle_help(),
-                _ => {}
-            }
-        }
-    }
-}
-
-impl eframe::App for App {
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        // TODO get this at runtime
-        const PROBABLY_TOO_SMALL: f32 = 300.0;
-
-        self.try_read(ctx);
-
-        // TODO redo this
-        let pos = self.scroll;
-
-        if let Some(y) = ctx.input().events.iter().find_map(|c| match c {
-            Event::Scroll(Vec2 { y, .. }) => Some(y),
-            _ => None,
-        }) {
-            self.scroll += y;
-        }
-
-        self.try_handle_key_press();
-
+    fn try_display_help(&mut self, ctx: &egui::Context) {
         if !matches!(self.showing_help, widgets::HelpView::None) {
-            self.display_help(ctx)
+            egui::Window::new("Help")
+                .title_bar(false)
+                .resizable(false)
+                .vscroll(true)
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .show(ctx, |ui| {
+                    widgets::Help::new(
+                        &mut self.showing_help,
+                        &mut self.key_mapping,
+                        &mut self.settings_state,
+                        &mut self.showing_tab_bar,
+                        &mut self.tabs,
+                        &mut self.config,
+                    )
+                    .ui(ui)
+                });
         }
+    }
 
-        if !self.is_connected() {
-            CentralPanel::default().show(ctx, |ui| {
-                widgets::StartScreen {
-                    images: &self.kappas,
-                    last: &mut self.last,
-                    index: &mut self.kappa_index,
-                }
-                .ui(ui);
-            });
-            return;
+    fn try_display_tab_bar(&mut self, ctx: &egui::Context) {
+        if self.showing_tab_bar {
+            egui::panel::TopBottomPanel::top("top")
+                .resizable(false)
+                .show(ctx, |ui| ui.add(&mut self.tabs));
         }
+    }
 
-        if self.tabs.active().showing_user_list() {
-            egui::panel::SidePanel::right(self.tabs.active().title()).show(ctx, |ui| {
-                ui.add(self.tabs.active().as_chatters(&self.cached_images))
-            });
-        }
-
+    fn display_edit_box(&mut self, ctx: &egui::Context) {
         egui::panel::TopBottomPanel::bottom("bottom")
             .resizable(false)
             .frame(egui::Frame::none().fill(Color32::BLACK))
@@ -689,7 +401,6 @@ impl eframe::App for App {
                 );
 
                 let id = resp.id;
-
                 if resp.lost_focus() && ctx.input().key_pressed(Key::Enter) {
                     let input = std::mem::take(self.tabs.active_mut().buffer_mut());
                     self.send_line(&input);
@@ -697,30 +408,57 @@ impl eframe::App for App {
 
                 ctx.memory().request_focus(id);
             });
+    }
 
-        if self.showing_tab_bar {
-            egui::panel::TopBottomPanel::top("top")
-                .resizable(false)
-                .show(ctx, |ui| ui.add(&mut self.tabs));
+    fn try_display_start_screen(&mut self, ctx: &egui::Context) -> bool {
+        if self.is_connected() {
+            return true;
         }
 
+        CentralPanel::default().show(ctx, |ui| {
+            widgets::StartScreen {
+                images: &self.kappas,
+                last: &mut self.last,
+                index: &mut self.kappa_index,
+                command: &mut self.settings_state.command,
+            }
+            .ui(ui)
+        });
+
+        if let Some(Command::Connect) = &self.settings_state.command {
+            self.settings_state.command.take();
+            self.connect().expect("connect") // TODO handle this
+        };
+
+        false
+    }
+}
+
+impl eframe::App for App {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        self.try_read(ctx);
+
+        self.try_handle_key_press();
+        self.try_display_help(ctx);
+
+        if !self.try_display_start_screen(ctx) {
+            return;
+        }
+
+        self.display_edit_box(&ctx);
+        self.try_display_tab_bar(ctx);
+
+        // TODO redo this
+        let pos = self.scroll;
+        self.scroll += ctx.input().scroll_delta.y;
+
         egui::panel::CentralPanel::default().show(ctx, |ui| {
-            let tab = self.tabs.active();
-
-            // let too_small = ui.available_width() <= PROBABLY_TOO_SMALL;
-            // if too_small && config.auto_layout {}
-
-            egui::containers::ScrollArea::vertical()
-                .id_source(tab.title())
-                .hscroll(false)
-                .stick_to_bottom(pos == self.scroll)
-                .auto_shrink([false, false])
-                .min_scrolled_height(0.0)
-                .show(ui, |ui| {
-                    for line in tab.entries() {
-                        ui.add(tab.as_widget(line));
-                    }
-                });
+            widgets::TabWidget {
+                tab: self.tabs.active_mut(),
+                cached_images: &mut self.cached_images,
+                stick: pos != self.scroll,
+            }
+            .ui(ui)
         });
     }
 
@@ -751,12 +489,10 @@ mod config;
 pub use config::EnvConfig;
 
 mod key_mapping;
-use egui_extras::RetainedImage;
-use helix::CachedImages;
-
 pub use key_mapping::{Chord, KeyAction, KeyHelper, KeyMapping};
 
 mod helix;
+use helix::CachedImages;
 
 mod tabs;
 use tabs::{Line, Tabs};

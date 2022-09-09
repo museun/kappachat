@@ -3,10 +3,13 @@ use std::time::Instant;
 use egui::{vec2, Direction, Layout, Pos2, Rect, Sense};
 use egui_extras::RetainedImage;
 
+use crate::command::Command;
+
 pub struct StartScreen<'a> {
     pub images: &'a [RetainedImage],
     pub index: &'a mut usize,
     pub last: &'a mut Instant,
+    pub command: &'a mut Option<Command<'static>>,
 }
 
 impl StartScreen<'_> {
@@ -59,12 +62,12 @@ impl<'a> egui::Widget for StartScreen<'a> {
                     });
 
                 if resp.clicked() {
-                    eprintln!("connect")
+                    self.command.replace(Command::Connect);
                 }
-                return resp;
+                resp
             })
-            .inner
+            .response
         })
-        .inner
+        .response
     }
 }

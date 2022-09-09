@@ -1,6 +1,6 @@
-use egui::{Align, ComboBox, Frame, Grid, Label, Layout, RichText, Sense};
+use egui::{Align, Key, Layout};
 
-use crate::{KeyHelper, KeyMapping};
+use crate::{state::SettingsState, tabs::Tabs, EnvConfig, KeyMapping};
 
 #[derive(Default, Debug, PartialEq, Eq)]
 pub enum HelpView {
@@ -11,85 +11,78 @@ pub enum HelpView {
     #[default]
     None,
 }
-pub struct HelpWidget<'a> {
-    mapping: &'a mut KeyMapping,
+
+pub struct Help<'a> {
+    showing_help: &'a mut HelpView,
+    key_mapping: &'a mut KeyMapping,
+    settings_state: &'a mut SettingsState,
+    showing_tab_bar: &'a mut bool,
+    tabs: &'a mut Tabs,
+    config: &'a mut EnvConfig,
 }
 
-impl<'a> HelpWidget<'a> {
-    pub fn new(mapping: &'a mut KeyMapping) -> Self {
-        Self { mapping }
+impl<'a> Help<'a> {
+    pub fn new(
+        showing_help: &'a mut HelpView,
+        key_mapping: &'a mut KeyMapping,
+        settings_state: &'a mut SettingsState,
+        showing_tab_bar: &'a mut bool,
+        tabs: &'a mut Tabs,
+        config: &'a mut EnvConfig,
+    ) -> Self {
+        Self {
+            showing_help,
+            key_mapping,
+            settings_state,
+            showing_tab_bar,
+            tabs,
+            config,
+        }
     }
 }
 
-impl<'a> egui::Widget for HelpWidget<'a> {
-    fn ui(self, ui: &mut egui::Ui) -> egui::Response {
-        Frame::none()
-            .show(ui, |ui| {
-                Grid::new("key_bindings")
-                    .num_columns(2)
-                    .striped(true)
-                    .show(ui, |ui| {
-                        for (action, chords) in self.mapping.reverse_mapping() {
-                            ui.add(
-                                Label::new(RichText::new(action.display()).monospace())
-                                    .sense(Sense::click()),
-                            )
-                            .on_hover_text_at_pointer(action.help())
-                            .context_menu(|ui| {
-                                if ui.small_button("➕ add keybinding").clicked() {
-                                    // TODO add keybinding
-                                    ui.close_menu()
-                                }
-                                if ui.small_button("🔄 reset to default").clicked() {
-                                    // TODO reset to default
-                                    ui.close_menu()
-                                }
-                            });
+impl<'a> egui::Widget for Help<'a> {
+    fn ui(mut self, ui: &mut egui::Ui) -> egui::Response {
+        use HelpView::*;
 
-                            ui.vertical(|ui| {
-                                for chord in chords {
-                                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                        ui.horizontal(|ui| {
-                                            ComboBox::from_id_source(chord.display())
-                                                .selected_text(chord.display_key())
-                                                .show_index(
-                                                    ui,
-                                                    &mut KeyHelper::keys()
-                                                        .iter()
-                                                        .position(|(name, key)| *key == chord.key())
-                                                        .unwrap_or(0),
-                                                    KeyHelper::keys().len(),
-                                                    |i| KeyHelper::keys()[i].0.to_string(),
-                                                )
-                                                .context_menu(|ui| {
-                                                    if ui
-                                                        .small_button("❌ remove keybinding")
-                                                        .clicked()
-                                                    {
-                                                        // TODO remove keybinding
-                                                        ui.close_menu()
-                                                    }
-                                                    if ui
-                                                        .small_button("🔄 reset to default")
-                                                        .clicked()
-                                                    {
-                                                        // TODO reset to default
-                                                        ui.close_menu()
-                                                    }
-                                                });
-                                            // TODO actually update these
-                                            ui.toggle_value(chord.ctrl(), "Ctrl");
-                                            ui.toggle_value(chord.alt(), "Alt");
-                                            ui.toggle_value(chord.shift(), "Shift");
-                                        });
-                                    });
-                                }
-                            });
-
-                            ui.end_row()
-                        }
-                    })
+        let resp = ui.horizontal(|ui| {
+            ui.selectable_value(self.showing_help, KeyBindings, "Key Bindings");
+            ui.selectable_value(self.showing_help, Settings, "Settings");
+            ui.selectable_value(self.showing_help, Twitch, "Twitch");
+            ui.selectable_value(self.showing_help, Autojoin, "Autojoin");
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                ui.button("close").clicked()
             })
-            .response
+            .inner
+        });
+
+        ui.separator();
+
+        match self.showing_help {
+            KeyBindings => {
+                super::KeyBindings::new(&mut self.key_mapping).ui(ui);
+            }
+            Settings => {
+                super::Settings::new(
+                    &mut self.settings_state,
+                    &mut self.showing_tab_bar,
+                    &mut self.tabs,
+                )
+                .ui(ui);
+            }
+            Twitch => {
+                super::TwitchSettings::new(&mut self.config, &mut self.settings_state).ui(ui);
+            }
+            Autojoin => {
+                super::TwitchAutojoin::new(&mut self.settings_state).ui(ui);
+            }
+            _ => {}
+        }
+
+        if resp.inner || ui.ctx().input().key_pressed(Key::Escape) {
+            *self.showing_help = HelpView::None;
+        }
+
+        resp.response
     }
 }

@@ -1,4 +1,4 @@
-use egui::{text::LayoutJob, Color32, RichText, Widget};
+use egui::{text::LayoutJob, Color32, Widget};
 
 use crate::{
     helix::{CachedImages, Chatters},
@@ -18,8 +18,7 @@ pub struct Tabs {
 impl Tabs {
     pub fn create() -> Self {
         Self {
-            // TODO remove
-            tabs: vec![Tab::new("*status")],
+            tabs: vec![Tab::new("*status")], // this is a hidden tab
             active: 0,
         }
     }
@@ -29,15 +28,15 @@ impl Tabs {
     }
 
     pub fn tabs_mut(&mut self) -> impl Iterator<Item = &mut Tab> + ExactSizeIterator {
-        self.tabs.iter_mut().skip(0)
+        self.tabs.iter_mut().skip(1)
     }
 
     pub fn next_tab(&mut self) {
-        self.active = (self.active + 1) % self.tabs.len();
+        self.active = (std::cmp::max(self.active, 1) + 1) % self.tabs.len();
     }
 
     pub fn previous_tab(&mut self) {
-        self.active = self.active.checked_sub(1).unwrap_or(self.tabs.len() - 1)
+        self.active = std::cmp::max(self.active.checked_sub(1).unwrap_or(self.tabs.len() - 1), 1)
     }
 
     pub fn set_active(&mut self, index: usize) {
@@ -45,7 +44,7 @@ impl Tabs {
             return;
         }
 
-        self.active = index;
+        self.active = std::cmp::min(index, 1);
     }
 
     pub fn set_active_by_name(&mut self, key: &str) {
@@ -61,7 +60,7 @@ impl Tabs {
     pub fn remove_tab(&mut self, key: &str) {
         if let Some(pos) = self.tabs.iter().position(|k| k.title == key) {
             self.tabs.remove(pos);
-            self.active -= 1;
+            self.active = std::cmp::max(self.active.saturating_sub(1), 1);
             self.next_tab();
         }
     }

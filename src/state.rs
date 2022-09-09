@@ -2,6 +2,8 @@ use std::collections::HashMap;
 
 use egui::Id;
 
+use crate::command::Command;
+
 #[derive(Default)]
 pub struct SettingsState {
     pub pixels_per_point: f32,
@@ -10,6 +12,8 @@ pub struct SettingsState {
     pub adding_channel_id: Option<Id>,
     pub adding_channel: Option<String>,
     pub twitch_visible: HashMap<u64, bool>,
+
+    pub command: Option<Command<'static>>,
 }
 
 impl SettingsState {

@@ -6,10 +6,12 @@ pub enum Command<'a> {
     Join { channel: &'a str },
     Part { channel: Option<&'a str> },
     Connect,
+    Nothing,
     Invalid { raw: &'a str },
 }
 
 impl<'a> Command<'a> {
+    // TODO redo this
     pub fn report(&self) -> Cow<'a, str> {
         match self {
             Self::Message { raw } => (*raw).into(),
@@ -25,6 +27,8 @@ impl<'a> Command<'a> {
             Self::Connect => "/connect".into(),
 
             Self::Invalid { raw } => (*raw).into(),
+
+            Self::Nothing => Cow::Borrowed("nothing"),
         }
     }
 
@@ -48,6 +52,7 @@ impl<'a> Command<'a> {
                 channel: iter.next(),
             },
 
+            // TODO get rid of this (we're using a GUI for it)
             "connect" => Self::Connect,
 
             _ => Self::Invalid { raw: input },
