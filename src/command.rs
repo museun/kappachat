@@ -40,13 +40,10 @@ impl<'a> Command<'a> {
         let mut iter = input[1..].splitn(2, ' ');
 
         match iter.next().expect("input should be valid here") {
-            "join" => {
-                if let Some(channel) = iter.next() {
-                    Self::Join { channel }
-                } else {
-                    Self::Invalid { raw: input }
-                }
-            }
+            "join" => iter
+                .next()
+                .map(|channel| Self::Join { channel })
+                .unwrap_or(Self::Invalid { raw: input }),
 
             "part" => Self::Part {
                 channel: iter.next(),

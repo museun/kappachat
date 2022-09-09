@@ -193,13 +193,13 @@ pub struct Color(pub u8, pub u8, pub u8);
 
 impl From<Color> for egui::Color32 {
     fn from(Color(r, g, b): Color) -> Self {
-        egui::Color32::from_rgb(r, g, b)
+        Self::from_rgb(r, g, b)
     }
 }
 
 impl From<&Color> for egui::Color32 {
     fn from(&Color(r, g, b): &Color) -> Self {
-        egui::Color32::from_rgb(r, g, b)
+        Self::from_rgb(r, g, b)
     }
 }
 
@@ -328,10 +328,10 @@ impl Prefix {
 
         Ok(head
             .split_once('!')
-            .map(|(head, ..)| Prefix::User {
+            .map(|(head, ..)| Self::User {
                 name: head.to_string(),
             })
-            .unwrap_or(Prefix::Server {
+            .unwrap_or(Self::Server {
                 host: head.to_string(),
             }))
     }

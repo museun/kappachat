@@ -80,7 +80,7 @@ impl Tabs {
         &mut self.tabs[self.active]
     }
 
-    pub fn tab_color(&self, index: usize) -> Color32 {
+    pub const fn tab_color(&self, index: usize) -> Color32 {
         if self.active == index {
             Color32::LIGHT_RED
         } else {
@@ -88,7 +88,7 @@ impl Tabs {
         }
     }
 
-    pub fn is_active(&self, index: usize) -> bool {
+    pub const fn is_active(&self, index: usize) -> bool {
         self.active == index
     }
 }
@@ -124,11 +124,11 @@ impl Tab {
         &self.title
     }
 
-    pub fn showing_user_list(&self) -> bool {
+    pub const fn showing_user_list(&self) -> bool {
         self.show_user_list
     }
 
-    pub fn showing_timestamp(&self) -> bool {
+    pub const fn showing_timestamp(&self) -> bool {
         self.timestamp
     }
 
@@ -140,7 +140,7 @@ impl Tab {
         &mut self.timestamp
     }
 
-    pub fn line_mode(&self) -> ChatLayout {
+    pub const fn line_mode(&self) -> ChatLayout {
         self.line_mode
     }
 

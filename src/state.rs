@@ -26,7 +26,7 @@ impl SettingsState {
     }
 
     pub fn dpi_repr(f: f32) -> &'static str {
-        const LOOKUP: [&'static str; 11] = [
+        const LOOKUP: [&str; 11] = [
             "1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8", "1.9", "2.0",
         ];
         let index = ((f * 10.0) as usize) - 10;

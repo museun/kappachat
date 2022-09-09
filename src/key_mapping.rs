@@ -211,7 +211,7 @@ impl Chord {
         KeyHelper::stringify_key(&self.key)
     }
 
-    pub fn key(&self) -> egui::Key {
+    pub const fn key(&self) -> egui::Key {
         self.key
     }
 }
@@ -380,7 +380,7 @@ macro_rules! define_key {
                 }
             }
 
-            pub fn help(&self) -> &'static str {
+            pub const fn help(&self) -> &'static str {
                 match self {
                     $(Self::$ident => $help,)*
                 }

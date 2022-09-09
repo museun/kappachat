@@ -21,10 +21,10 @@ impl<'a> egui::Widget for TwitchAutojoin<'a> {
                         ui.label("Channels");
 
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            if self.settings_state.adding_channel.is_some() {
-                                if ui.small_button("❌").clicked() {
-                                    self.settings_state.adding_channel.take();
-                                }
+                            if self.settings_state.adding_channel.is_some()
+                                && ui.small_button("❌").clicked()
+                            {
+                                self.settings_state.adding_channel.take();
                             }
 
                             if let Some(str) = &mut self.settings_state.adding_channel {
@@ -63,12 +63,12 @@ impl<'a> egui::Widget for TwitchAutojoin<'a> {
                                 }
                             }
 
-                            if self.settings_state.adding_channel.is_none() {
-                                if ui.small_button("➕").clicked() {
-                                    self.settings_state.adding_channel.replace(String::new());
-                                    if let Some(id) = self.settings_state.adding_channel_id {
-                                        ui.ctx().memory().request_focus(id);
-                                    }
+                            if self.settings_state.adding_channel.is_none()
+                                && ui.small_button("➕").clicked()
+                            {
+                                self.settings_state.adding_channel.replace(String::new());
+                                if let Some(id) = self.settings_state.adding_channel_id {
+                                    ui.ctx().memory().request_focus(id);
                                 }
                             }
                         });

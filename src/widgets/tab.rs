@@ -25,7 +25,7 @@ impl<'a> egui::Widget for TabWidget<'a> {
                 egui::panel::SidePanel::right(self.tab.title())
                     .resizable(false)
                     .show(ui.ctx(), |ui| {
-                        ui.add(self.tab.as_chatters(&self.cached_images));
+                        ui.add(self.tab.as_chatters(self.cached_images));
                     });
             }
         })

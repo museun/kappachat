@@ -445,7 +445,7 @@ impl eframe::App for App {
             return;
         }
 
-        self.display_edit_box(&ctx);
+        self.display_edit_box(ctx);
         self.try_display_tab_bar(ctx);
 
         // TODO redo this
@@ -473,7 +473,7 @@ pub trait RequestPaint: Send + Sync {
 
 impl RequestPaint for egui::Context {
     fn request_repaint(&self) {
-        egui::Context::request_repaint(self)
+        Self::request_repaint(self)
     }
 }
 

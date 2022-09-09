@@ -42,7 +42,7 @@ impl<'a> Help<'a> {
 }
 
 impl<'a> egui::Widget for Help<'a> {
-    fn ui(mut self, ui: &mut egui::Ui) -> egui::Response {
+    fn ui(self, ui: &mut egui::Ui) -> egui::Response {
         use HelpView::*;
 
         let resp = ui.horizontal(|ui| {
@@ -60,21 +60,16 @@ impl<'a> egui::Widget for Help<'a> {
 
         match self.showing_help {
             KeyBindings => {
-                super::KeyBindings::new(&mut self.key_mapping).ui(ui);
+                super::KeyBindings::new(self.key_mapping).ui(ui);
             }
             Settings => {
-                super::Settings::new(
-                    &mut self.settings_state,
-                    &mut self.showing_tab_bar,
-                    &mut self.tabs,
-                )
-                .ui(ui);
+                super::Settings::new(self.settings_state, self.showing_tab_bar, self.tabs).ui(ui);
             }
             Twitch => {
-                super::TwitchSettings::new(&mut self.config, &mut self.settings_state).ui(ui);
+                super::TwitchSettings::new(self.config, self.settings_state).ui(ui);
             }
             Autojoin => {
-                super::TwitchAutojoin::new(&mut self.settings_state).ui(ui);
+                super::TwitchAutojoin::new(self.settings_state).ui(ui);
             }
             _ => {}
         }
