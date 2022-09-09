@@ -1,11 +1,7 @@
-use egui::{
-    containers::ScrollArea, text::LayoutJob, vec2, Color32, Frame, Label, Layout, Response,
-    RichText, Sense, Widget,
-};
+use egui::{text::LayoutJob, Color32, RichText, Widget};
 
 use crate::{
-    helix::{CachedImages, Chatters, Kind},
-    twitch::TextKind,
+    helix::{CachedImages, Chatters},
     ChatLayout,
 };
 
@@ -190,156 +186,17 @@ impl Tab {
     }
 
     pub fn as_chatters<'a>(&'a self, cached: &'a CachedImages) -> impl Widget + 'a {
-        ChatterList {
+        crate::widgets::ChatterList {
             chatters: &self.chatters,
             cached_images: cached,
         }
     }
 
     pub fn as_widget<'a>(&'a self, line: &'a Line) -> impl Widget + 'a {
-        LineWidget {
+        crate::widgets::LineWidget {
             line,
             tab: self,
             // cached_images: cached,
-        }
-    }
-}
-
-struct ChatterList<'a> {
-    chatters: &'a Chatters,
-    cached_images: &'a CachedImages,
-}
-
-impl<'a> egui::Widget for ChatterList<'a> {
-    fn ui(self, ui: &mut egui::Ui) -> egui::Response {
-        Frame::none()
-            .show(ui, |ui| {
-                ScrollArea::vertical().show(ui, |ui| {
-                    for (kind, chatters) in &self.chatters.chatters {
-                        let id = ui.make_persistent_id(kind.as_str());
-
-                        let mut state =
-                            egui::collapsing_header::CollapsingState::load_with_default_open(
-                                ui.ctx(),
-                                id,
-                                !matches!(kind, Kind::Viewer),
-                            );
-
-                        let header = ui
-                            .scope(|ui| {
-                                ui.spacing_mut().item_spacing.x = 2.0;
-
-                                ui.horizontal(|ui| {
-                                    if let Some(id) = self.cached_images.id_map.get(kind) {
-                                        if let Some(img) = self.cached_images.map.get(id) {
-                                            img.show_size(ui, vec2(8.0, 8.0));
-                                        }
-                                    }
-
-                                    ui.add(
-                                        Label::new(
-                                            RichText::new(kind.as_str())
-                                                .color(Color32::WHITE)
-                                                .small(),
-                                        )
-                                        .wrap(false)
-                                        .sense(Sense::click()),
-                                    )
-                                })
-                                .inner
-                            })
-                            .inner;
-
-                        if header.clicked() {
-                            state.toggle(ui);
-                        }
-
-                        state.show_body_unindented(ui, |ui| {
-                            for chatter in chatters {
-                                ui.small(chatter);
-                            }
-                        });
-                    }
-                })
-            })
-            .response
-    }
-}
-
-struct LineWidget<'a> {
-    line: &'a Line,
-    tab: &'a Tab,
-    // cached_images: &'a CachedImages,
-}
-
-impl<'a> egui::Widget for LineWidget<'a> {
-    fn ui(self, ui: &mut egui::Ui) -> egui::Response {
-        let line = match self.line {
-            Line::Twitch { line } => line,
-            Line::Status { msg } => return ui.label(msg.clone()),
-        };
-
-        let ts = self
-            .tab
-            .timestamp
-            .then(|| Label::new(RichText::new(line.timestamp.as_str()).weak()));
-
-        let sender = Label::new(RichText::new(&line.sender).color(line.color));
-
-        let data: Box<dyn FnOnce(&mut egui::Ui) -> Response> =
-            if !line.spans.iter().any(|c| matches!(c, TextKind::Emote(..))) {
-                Box::new(move |ui: &mut egui::Ui| {
-                    ui.add(Label::new(RichText::new(&line.data).color(Color32::WHITE)).wrap(true))
-                }) as _
-            } else {
-                Box::new(move |ui: &mut egui::Ui| {
-                    ui.add(Label::new(RichText::new(&line.data).color(Color32::WHITE)).wrap(true))
-                }) as _
-
-                // let font_id = TextStyle::Body.resolve(&*ui.style());
-                // Box::new(move |ui: &mut egui::Ui| ui.small("asdf")) as _
-            };
-
-        // let job = line
-        //     .spans
-        //     .iter()
-        //     .fold(LayoutJob::default(), |mut layout, kind| match kind {
-        //         TextKind::Emote(id) => {
-        //             let id = self.cached_images.emote_map[id];
-        //             let img = &self.cached_images.map[&id];
-
-        //             todo!();
-        //         }
-        //         TextKind::Text(text) => layout.simple(text, font_id.clone(), Color32::WHITE),
-        //     });
-
-        match self.tab.line_mode {
-            ChatLayout::Traditional => {
-                ui.horizontal(|ui| {
-                    if let Some(ts) = ts {
-                        ui.add(ts);
-                    }
-                    ui.add(sender);
-                    ui.add(data);
-                })
-                .response
-            }
-            ChatLayout::Modern => {
-                ui.vertical(|ui| {
-                    ui.horizontal_top(|ui| {
-                        ui.add(sender);
-                        if let Some(ts) = ts {
-                            ui.with_layout(Layout::right_to_left(egui::Align::Max), |ui| {
-                                ui.add(ts)
-                            });
-                        }
-                    });
-
-                    ui.add(data);
-                    ui.separator();
-                })
-                .response
-            }
         }
     }
 }
