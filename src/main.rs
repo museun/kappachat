@@ -695,7 +695,7 @@ impl eframe::App for App {
                     self.send_line(&input);
                 }
 
-                // ctx.memory().request_focus(id);
+                ctx.memory().request_focus(id);
             });
 
         if self.showing_tab_bar {

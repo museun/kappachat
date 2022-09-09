@@ -9,3 +9,6 @@ pub use line::LineWidget;
 
 mod chatters;
 pub use chatters::ChatterList;
+
+mod tabs_widget;
+pub use tabs_widget::TabsWidget;
