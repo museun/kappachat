@@ -23,6 +23,3 @@ simple_env_load  = "0.2.0"
 time             = { version = "0.3.14", features = ["parsing", "formatting", "macros", "local-offset", "serde", "serde-well-known"] }
 ureq             = { version = "2.5.0", features = ["json"] }
 uuid             = { version = "1.1.2", features = ["v4", "serde"] }
-
-[patch.crates-io]
-# egui = { path = "c:/dev/forks/egui/crates/egui" }
