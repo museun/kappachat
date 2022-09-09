@@ -462,6 +462,13 @@ impl eframe::App for App {
         });
     }
 
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        storage.set_string(
+            "window_pixels_per_point",
+            self.settings_state.pixels_per_point.to_string(),
+        );
+    }
+
     fn persist_native_window(&self) -> bool {
         true
     }
