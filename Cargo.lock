@@ -668,29 +668,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "egui-test"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "eframe",
- "egui",
- "egui_extras",
- "fastrand",
- "flume",
- "heck",
- "image",
- "once_cell",
- "regex",
- "serde",
- "serde_json",
- "serde_yaml",
- "simple_env_load",
- "time",
- "ureq",
- "uuid",
-]
-
-[[package]]
 name = "egui-winit"
 version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1187,6 +1164,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "258451ab10b34f8af53416d1fdab72c22e805f0c92a1136d59470ec0b11138b2"
 dependencies = [
  "wasm-bindgen",
+]
+
+[[package]]
+name = "kappachat"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "eframe",
+ "egui",
+ "egui_extras",
+ "fastrand",
+ "flume",
+ "heck",
+ "image",
+ "once_cell",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "simple_env_load",
+ "time",
+ "ureq",
+ "uuid",
 ]
 
 [[package]]
