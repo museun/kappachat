@@ -8,7 +8,7 @@ use egui::{
 };
 use egui_extras::RetainedImage;
 
-struct App {
+pub struct App {
     interaction: Interaction,
     context: egui::Context,
 
@@ -28,9 +28,10 @@ struct App {
 
     settings_state: SettingsState,
 
+    line: Option<String>,
+
     last: Instant,
     kappa_index: usize,
-
     kappas: [RetainedImage; 5],
 }
 
@@ -62,6 +63,8 @@ impl App {
             showing_tab_bar: true,
             showing_help: widgets::HelpView::None,
             scroll: 0.0,
+
+            line: None,
 
             settings_state: SettingsState {
                 pixels_per_point,
@@ -360,24 +363,26 @@ mod widgets;
 
 impl App {
     fn try_display_help(&mut self, ctx: &egui::Context) {
-        if !matches!(self.showing_help, widgets::HelpView::None) {
-            egui::Window::new("Help")
-                .title_bar(false)
-                .resizable(false)
-                .vscroll(true)
-                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-                .show(ctx, |ui| {
-                    widgets::Help::new(
-                        &mut self.showing_help,
-                        &mut self.key_mapping,
-                        &mut self.settings_state,
-                        &mut self.showing_tab_bar,
-                        &mut self.tabs,
-                        &mut self.config,
-                    )
-                    .ui(ui)
-                });
+        if matches!(self.showing_help, widgets::HelpView::None) {
+            return;
         }
+
+        egui::Window::new("Help")
+            .title_bar(false)
+            .resizable(false)
+            .vscroll(true)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ctx, |ui| {
+                widgets::Help::new(
+                    &mut self.showing_help,
+                    &mut self.key_mapping,
+                    &mut self.settings_state,
+                    &mut self.showing_tab_bar,
+                    &mut self.tabs,
+                    &mut self.config,
+                )
+                .ui(ui)
+            });
     }
 
     fn try_display_tab_bar(&mut self, ctx: &egui::Context) {
@@ -386,28 +391,6 @@ impl App {
                 .resizable(false)
                 .show(ctx, |ui| ui.add(&mut self.tabs));
         }
-    }
-
-    fn display_edit_box(&mut self, ctx: &egui::Context) {
-        egui::panel::TopBottomPanel::bottom("bottom")
-            .resizable(false)
-            .frame(egui::Frame::none().fill(Color32::BLACK))
-            .show(ctx, |ui| {
-                // TODO multi-line edit box
-                let resp = ui.add(
-                    TextEdit::singleline(self.tabs.active_mut().buffer_mut())
-                        .frame(false)
-                        .lock_focus(true),
-                );
-
-                let id = resp.id;
-                if resp.lost_focus() && ctx.input().key_pressed(Key::Enter) {
-                    let input = std::mem::take(self.tabs.active_mut().buffer_mut());
-                    self.send_line(&input);
-                }
-
-                ctx.memory().request_focus(id);
-            });
     }
 
     fn try_display_start_screen(&mut self, ctx: &egui::Context) -> bool {
@@ -432,6 +415,15 @@ impl App {
 
         false
     }
+
+    fn try_send_line(&mut self) {
+        if let Some(line) = &mut self.line {
+            if !line.is_empty() {
+                let line = std::mem::take(line);
+                self.send_line(&line);
+            }
+        }
+    }
 }
 
 impl eframe::App for App {
@@ -445,7 +437,15 @@ impl eframe::App for App {
             return;
         }
 
-        self.display_edit_box(ctx);
+        egui::panel::TopBottomPanel::bottom("bottom")
+            .resizable(false)
+            .frame(egui::Frame::none().fill(Color32::BLACK))
+            .show(ctx, |ui| {
+                widgets::EditBox::new(&mut self.tabs, &mut self.line).ui(ui)
+            });
+
+        self.try_send_line();
+
         self.try_display_tab_bar(ctx);
 
         // TODO redo this

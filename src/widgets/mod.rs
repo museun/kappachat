@@ -33,3 +33,6 @@ pub use twitch_settings::TwitchSettings;
 
 mod key_bindings;
 pub use key_bindings::KeyBindings;
+
+mod edit_box;
+pub use edit_box::EditBox;
