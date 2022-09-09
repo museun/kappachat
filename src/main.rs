@@ -1,12 +1,11 @@
 #![cfg_attr(debug_assertions, allow(dead_code, unused_variables,))]
 
-use std::{collections::HashMap, path::Path, time::Instant};
+use std::time::Instant;
 
 use eframe::NativeOptions;
 use egui::{
-    text::LayoutJob, vec2, Align, CentralPanel, Color32, ComboBox, Direction, Event, Frame, Grid,
-    Id, Key, Label, Layout, Pos2, Rect, RichText, Sense, TextEdit, TextFormat, TextStyle, Vec2,
-    Widget,
+    text::LayoutJob, Align, CentralPanel, Color32, ComboBox, Event, Grid, Key, Layout, TextEdit,
+    TextFormat, TextStyle, Vec2, Widget,
 };
 
 struct App {
@@ -24,7 +23,7 @@ struct App {
 
     tabs: Tabs,
     showing_tab_bar: bool,
-    showing_help: HelpView,
+    showing_help: widgets::HelpView,
     scroll: f32,
 
     settings_state: SettingsState,
@@ -61,7 +60,7 @@ impl App {
 
             tabs: Tabs::create(),
             showing_tab_bar: true,
-            showing_help: HelpView::None,
+            showing_help: widgets::HelpView::None,
             scroll: 0.0,
 
             settings_state: SettingsState {
@@ -300,10 +299,10 @@ impl App {
     }
 
     fn toggle_help(&mut self) {
-        self.showing_help = if matches!(self.showing_help, HelpView::None) {
-            HelpView::KeyBindings
+        self.showing_help = if matches!(self.showing_help, widgets::HelpView::None) {
+            widgets::HelpView::KeyBindings
         } else {
-            HelpView::None
+            widgets::HelpView::None
         }
     }
 
@@ -352,196 +351,10 @@ impl App {
     }
 }
 
-#[derive(Default)]
-struct SettingsState {
-    pixels_per_point: f32,
-    channels: Vec<String>,
-    channels_to_remove: Vec<String>,
-    adding_channel_id: Option<Id>,
-    adding_channel: Option<String>,
-    twitch_visible: HashMap<u64, bool>,
-}
+mod state;
+use state::SettingsState;
 
-impl SettingsState {
-    fn make_hash(input: &str) -> u64 {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash as _, Hasher as _};
-        let mut hasher = DefaultHasher::new();
-        input.hash(&mut hasher);
-        hasher.finish()
-    }
-
-    fn dpi_repr(f: f32) -> &'static str {
-        const LOOKUP: [&'static str; 11] = [
-            "1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8", "1.9", "2.0",
-        ];
-        let index = ((f * 10.0) as usize) - 10;
-        LOOKUP[index]
-    }
-
-    fn dpi_range() -> impl Iterator<Item = f32> {
-        std::iter::successors(Some(1.0_f32), |a| Some(a + 0.1)).take(11)
-    }
-}
-
-struct StartScreen<'a> {
-    images: &'a [RetainedImage],
-    index: &'a mut usize,
-    last: &'a mut Instant,
-}
-
-impl StartScreen<'_> {
-    fn pick_random(&mut self) {
-        if self.last.elapsed() > std::time::Duration::from_secs(1) {
-            *self.last = Instant::now();
-            *self.index = fastrand::usize(0..self.images.len());
-        }
-    }
-}
-
-impl<'a> egui::Widget for StartScreen<'a> {
-    fn ui(mut self, ui: &mut egui::Ui) -> egui::Response {
-        self.pick_random();
-
-        ui.ctx()
-            .request_repaint_after(std::time::Duration::from_secs(1));
-
-        ui.scope(|ui| {
-            ui.style_mut().spacing.button_padding = vec2(100.0, 100.0);
-            ui.with_layout(Layout::centered_and_justified(Direction::TopDown), |ui| {
-                let y = ui.available_height() / 2.0;
-                let x = ui.available_width() / 2.0;
-
-                let resp = ui.add(
-                    egui::ImageButton::new(
-                        self.images[*self.index].texture_id(ui.ctx()),
-                        self.images[*self.index].size_vec2(),
-                    )
-                    .frame(false),
-                );
-
-                let resp = ui
-                    .interact(
-                        Rect::from_center_size(Pos2 { x, y }, self.images[*self.index].size_vec2()),
-                        resp.id,
-                        Sense::click(),
-                    )
-                    .on_hover_ui_at_pointer(|ui| {
-                        ui.horizontal(|ui| {
-                            ui.label("Click to");
-                            ui.add(
-                                egui::ImageButton::new(
-                                    self.images[*self.index].texture_id(ui.ctx()),
-                                    self.images[*self.index].size_vec2() / vec2(6.0, 6.0),
-                                )
-                                .frame(false),
-                            );
-                        });
-                    });
-
-                if resp.clicked() {
-                    eprintln!("connect")
-                }
-                return resp;
-            })
-            .inner
-        })
-        .inner
-    }
-}
-
-#[derive(Default, Debug, PartialEq, Eq)]
-enum HelpView {
-    KeyBindings,
-    Settings,
-    Twitch,
-    Autojoin,
-    #[default]
-    None,
-}
-
-struct HelpWidget<'a> {
-    mapping: &'a mut KeyMapping,
-}
-
-impl<'a> HelpWidget<'a> {
-    fn new(mapping: &'a mut KeyMapping) -> Self {
-        Self { mapping }
-    }
-}
-
-impl<'a> egui::Widget for HelpWidget<'a> {
-    fn ui(self, ui: &mut egui::Ui) -> egui::Response {
-        Frame::none()
-            .show(ui, |ui| {
-                Grid::new("key_bindings")
-                    .num_columns(2)
-                    .striped(true)
-                    .show(ui, |ui| {
-                        for (action, chords) in self.mapping.reverse_mapping() {
-                            ui.add(
-                                Label::new(RichText::new(action.display()).monospace())
-                                    .sense(Sense::click()),
-                            )
-                            .on_hover_text_at_pointer(action.help())
-                            .context_menu(|ui| {
-                                if ui.small_button("➕ add keybinding").clicked() {
-                                    // TODO add keybinding
-                                    ui.close_menu()
-                                }
-                                if ui.small_button("🔄 reset to default").clicked() {
-                                    // TODO reset to default
-                                    ui.close_menu()
-                                }
-                            });
-
-                            ui.vertical(|ui| {
-                                for chord in chords {
-                                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                        ui.horizontal(|ui| {
-                                            ComboBox::from_id_source(chord.display())
-                                                .selected_text(chord.display_key())
-                                                .show_index(
-                                                    ui,
-                                                    &mut KeyHelper::keys()
-                                                        .iter()
-                                                        .position(|(name, key)| *key == chord.key())
-                                                        .unwrap_or(0),
-                                                    KeyHelper::keys().len(),
-                                                    |i| KeyHelper::keys()[i].0.to_string(),
-                                                )
-                                                .context_menu(|ui| {
-                                                    if ui
-                                                        .small_button("❌ remove keybinding")
-                                                        .clicked()
-                                                    {
-                                                        // TODO remove keybinding
-                                                        ui.close_menu()
-                                                    }
-                                                    if ui
-                                                        .small_button("🔄 reset to default")
-                                                        .clicked()
-                                                    {
-                                                        // TODO reset to default
-                                                        ui.close_menu()
-                                                    }
-                                                });
-                                            // TODO actually update these
-                                            ui.toggle_value(chord.ctrl(), "Ctrl");
-                                            ui.toggle_value(chord.alt(), "Alt");
-                                            ui.toggle_value(chord.shift(), "Shift");
-                                        });
-                                    });
-                                }
-                            });
-
-                            ui.end_row()
-                        }
-                    })
-            })
-            .response
-    }
-}
+mod widgets;
 
 impl App {
     fn display_twitch_autojoin(&mut self, ui: &mut egui::Ui) {
@@ -676,7 +489,7 @@ impl App {
     }
 
     fn display_key_bindings(&mut self, ui: &mut egui::Ui) {
-        HelpWidget::new(&mut self.key_mapping).ui(ui);
+        widgets::HelpWidget::new(&mut self.key_mapping).ui(ui);
     }
 
     fn display_channel_settings(&mut self, ui: &mut egui::Ui) {
@@ -763,12 +576,24 @@ impl App {
                     .horizontal(|ui| {
                         ui.selectable_value(
                             &mut self.showing_help,
-                            HelpView::KeyBindings,
+                            widgets::HelpView::KeyBindings,
                             "Key Bindings",
                         );
-                        ui.selectable_value(&mut self.showing_help, HelpView::Settings, "Settings");
-                        ui.selectable_value(&mut self.showing_help, HelpView::Twitch, "Twitch");
-                        ui.selectable_value(&mut self.showing_help, HelpView::Autojoin, "Autojoin");
+                        ui.selectable_value(
+                            &mut self.showing_help,
+                            widgets::HelpView::Settings,
+                            "Settings",
+                        );
+                        ui.selectable_value(
+                            &mut self.showing_help,
+                            widgets::HelpView::Twitch,
+                            "Twitch",
+                        );
+                        ui.selectable_value(
+                            &mut self.showing_help,
+                            widgets::HelpView::Autojoin,
+                            "Autojoin",
+                        );
 
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                             ui.button("close").clicked()
@@ -780,19 +605,19 @@ impl App {
                 ui.separator();
 
                 match self.showing_help {
-                    HelpView::KeyBindings => {
+                    widgets::HelpView::KeyBindings => {
                         self.display_key_bindings(ui);
                     }
 
-                    HelpView::Settings => {
+                    widgets::HelpView::Settings => {
                         self.display_settings(ui);
                     }
 
-                    HelpView::Twitch => {
+                    widgets::HelpView::Twitch => {
                         self.display_twitch_settings(ui);
                     }
 
-                    HelpView::Autojoin => {
+                    widgets::HelpView::Autojoin => {
                         self.display_twitch_autojoin(ui);
                     }
 
@@ -812,22 +637,6 @@ impl App {
 }
 
 impl eframe::App for App {
-    fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        storage.set_string(
-            "keybindings",
-            serde_yaml::to_string(&self.key_mapping).unwrap(),
-        );
-
-        storage.set_string(
-            "window_pixels_per_point",
-            self.context.pixels_per_point().to_string(),
-        );
-    }
-
-    fn persist_native_window(&self) -> bool {
-        true
-    }
-
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         // TODO get this at runtime
         const PROBABLY_TOO_SMALL: f32 = 300.0;
@@ -846,13 +655,13 @@ impl eframe::App for App {
 
         self.try_handle_key_press();
 
-        if !matches!(self.showing_help, HelpView::None) {
+        if !matches!(self.showing_help, widgets::HelpView::None) {
             self.display_help(ctx)
         }
 
         if !self.is_connected() {
             CentralPanel::default().show(ctx, |ui| {
-                StartScreen {
+                widgets::StartScreen {
                     images: &self.kappas,
                     last: &mut self.last,
                     index: &mut self.kappa_index,
@@ -915,7 +724,7 @@ impl eframe::App for App {
         });
     }
 
-    fn warm_up_enabled(&self) -> bool {
+    fn persist_native_window(&self) -> bool {
         true
     }
 }
@@ -945,8 +754,7 @@ mod key_mapping;
 use egui_extras::RetainedImage;
 use helix::CachedImages;
 
-use key_mapping::KeyHelper;
-pub use key_mapping::{Chord, KeyAction, KeyMapping};
+pub use key_mapping::{Chord, KeyAction, KeyHelper, KeyMapping};
 
 mod helix;
 
@@ -970,21 +778,7 @@ pub use ext::JobExt as _;
 mod interaction;
 pub use interaction::Interaction;
 
-fn load_key_bindings(path: impl AsRef<Path>) -> KeyMapping {
-    std::fs::read_to_string(path)
-        .ok()
-        .and_then(|data| serde_yaml::from_str(&data).ok())
-        .unwrap_or_default()
-}
-
-#[test]
-fn write_default() {
-    std::fs::write(
-        "keybindings.yaml",
-        serde_yaml::to_string(&KeyMapping::default()).unwrap(),
-    )
-    .unwrap()
-}
+mod kappas;
 
 fn main() -> anyhow::Result<()> {
     simple_env_load::load_env_from([".dev.env", ".secrets.env"]);
@@ -1055,49 +849,4 @@ fn main() -> anyhow::Result<()> {
     );
 
     Ok(())
-}
-
-mod kappas {
-    use egui_extras::RetainedImage;
-
-    pub const KAPPA_PNG: &[u8] = //
-        include_bytes!(concat!(
-            env!("CARGO_MANIFEST_DIR"), //
-            "/kappas/kappa.png"
-        ));
-
-    pub const KAPPA_CLAUS_PNG: &[u8] = //
-        include_bytes!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/kappas/kappa_claus.png"
-        ));
-
-    pub const KAPPA_PRIDE_PNG: &[u8] = //
-        include_bytes!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/kappas/kappa_pride.png"
-        ));
-
-    pub const KAPPA_ROSS_PNG: &[u8] = //
-        include_bytes!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/kappas/kappa_ross.png"
-        ));
-
-    pub const KAPPA_WEALTH_PNG: &[u8] = //
-        include_bytes!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/kappas/kappa_wealth.png"
-        ));
-
-    pub fn load_kappas() -> [RetainedImage; 5] {
-        [
-            (KAPPA_PNG, "kappa.png"),
-            (KAPPA_CLAUS_PNG, "kappa_claus.png"),
-            (KAPPA_PRIDE_PNG, "kappa_pride.png"),
-            (KAPPA_ROSS_PNG, "kappa_ross.png"),
-            (KAPPA_WEALTH_PNG, "kappa_wealth.png"),
-        ]
-        .map(|(data, name)| RetainedImage::from_image_bytes(name, data).unwrap())
-    }
 }
