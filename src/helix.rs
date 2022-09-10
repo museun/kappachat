@@ -38,7 +38,7 @@ impl Kind {
         }
     }
 
-    pub fn from_str(str: &str) -> Option<Self> {
+    pub fn parse(str: &str) -> Option<Self> {
         Some(match str {
             "broadcaster" => Self::Broadcaster,
             "vip" => Self::Vip,
@@ -67,16 +67,6 @@ struct OAuth {
 }
 
 impl OAuth {
-    pub fn fake(agent: ureq::Agent, client_id: &str, client_secret: &str) -> Self {
-        Self {
-            access_token: String::new(),
-            refresh_token: None,
-            expires_in: 0,
-            token_type: String::new(),
-            client_id: String::new(),
-            bearer_token: String::new(),
-        }
-    }
     pub fn create(
         agent: ureq::Agent,
         client_id: &str,
@@ -106,21 +96,24 @@ impl OAuth {
 }
 
 pub struct Client {
-    oauth: OAuth,
+    oauth: Option<OAuth>,
     agent: ureq::Agent,
 }
 
-impl Client {
-    pub fn fake(client_id: &str, client_secret: &str) -> anyhow::Result<Self> {
-        let agent = ureq::agent();
-        let oauth = OAuth::create(agent.clone(), client_id, client_secret)?;
-        Ok(Self { oauth, agent })
+impl Default for Client {
+    fn default() -> Self {
+        Self {
+            oauth: None,
+            agent: ureq::agent(),
+        }
     }
+}
 
-    pub fn new(client_id: &str, client_secret: &str) -> anyhow::Result<Self> {
-        let agent = ureq::agent();
-        let oauth = OAuth::create(agent.clone(), client_id, client_secret)?;
-        Ok(Self { oauth, agent })
+impl Client {
+    pub fn fetch_oauth(&mut self, client_id: &str, client_secret: &str) -> anyhow::Result<()> {
+        let oauth = OAuth::create(self.agent.clone(), client_id, client_secret)?;
+        self.oauth.replace(oauth);
+        Ok(())
     }
 
     pub fn get_chatters_for(&self, channel: &str) -> anyhow::Result<Chatters> {
@@ -145,11 +138,23 @@ impl Client {
         Ok(streams.remove(0))
     }
 
-    fn get_response<'k, 'v, T: for<'de> serde::Deserialize<'de>>(
+    fn get_response<'k, 'v, T>(
         &self,
         ep: &str,
         query: impl IntoIterator<Item = (&'k str, &'v str)>,
-    ) -> anyhow::Result<Vec<T>> {
+    ) -> anyhow::Result<Vec<T>>
+    where
+        T: for<'de> serde::Deserialize<'de>,
+    {
+        let (client_id, bearer_token) = match &self.oauth {
+            Some(OAuth {
+                client_id,
+                bearer_token,
+                ..
+            }) => (client_id, bearer_token),
+            _ => anyhow::bail!("OAuth creds haven't be retrieved yet"),
+        };
+
         #[derive(serde::Deserialize)]
         struct Resp<T> {
             data: Vec<T>,
@@ -159,8 +164,8 @@ impl Client {
         let req = query.into_iter().fold(req, |req, (k, v)| req.query(k, v));
 
         let req = [
-            ("client-id", &self.oauth.client_id),
-            ("authorization", &self.oauth.bearer_token),
+            ("client-id", &client_id), //
+            ("authorization", &bearer_token),
         ]
         .into_iter()
         .fold(req, |req, (k, v)| req.set(k, v));
@@ -309,7 +314,7 @@ impl CachedImages {
                         badge
                             .versions
                             .iter()
-                            .zip(std::iter::repeat(Kind::from_str(&badge.set_id)))
+                            .zip(std::iter::repeat(Kind::parse(&badge.set_id)))
                     })
                     .map(|(v, kind)| (&v.image_url_4x, kind))
                 {

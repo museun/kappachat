@@ -21,7 +21,7 @@ impl<'a> egui::Widget for LineWidget<'a> {
 
         let ts = self
             .tab
-            .showing_timestamp()
+            .timestamp
             .then(|| Label::new(RichText::new(line.timestamp.as_str()).weak()));
 
         let sender = Label::new(RichText::new(&line.sender).color(line.color));
@@ -53,7 +53,7 @@ impl<'a> egui::Widget for LineWidget<'a> {
         //         TextKind::Text(text) => layout.simple(text, font_id.clone(), Color32::WHITE),
         //     });
 
-        match self.tab.line_mode() {
+        match self.tab.line_mode {
             ChatLayout::Traditional => {
                 ui.horizontal(|ui| {
                     if let Some(ts) = ts {

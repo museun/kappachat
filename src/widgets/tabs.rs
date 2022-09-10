@@ -15,7 +15,7 @@ impl egui::Widget for TabsWidget<'_> {
                 .skip(1)
                 .map(|(i, e)| (i - 1, e))
             {
-                let text = RichText::new(tab.title()).color(self.tab_color(index));
+                let text = RichText::new(&tab.title).color(self.tab_color(index));
                 if ui.selectable_label(self.is_active(index), text).clicked() {
                     self.active = index;
                 }

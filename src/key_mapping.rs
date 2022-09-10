@@ -3,7 +3,9 @@ use std::{
     str::FromStr,
 };
 
-#[derive(Debug)]
+use egui::Modifiers;
+
+#[derive(Debug, Clone)]
 pub struct KeyMapping {
     map: Vec<(Chord, KeyAction)>,
     reverse: Vec<(KeyAction, Vec<Chord>)>,
@@ -65,6 +67,15 @@ impl KeyMapping {
 
     pub fn reverse_mapping(&mut self) -> &mut [(KeyAction, Vec<Chord>)] {
         &mut self.reverse
+    }
+
+    pub fn update_from_reverse(&mut self) {
+        self.map.clear();
+        for (action, chords) in &self.reverse {
+            for chord in chords {
+                self.map.push((*chord, *action));
+            }
+        }
     }
 
     pub fn iter(
@@ -181,6 +192,18 @@ pub struct Chord {
     key: egui::Key,
 }
 
+impl From<(Modifiers, egui::Key)> for Chord {
+    fn from((m, k): (Modifiers, egui::Key)) -> Self {
+        Self {
+            ctrl: m.ctrl,
+            alt: m.alt,
+            shift: m.shift,
+            cmd: m.mac_cmd,
+            key: k,
+        }
+    }
+}
+
 impl Chord {
     const fn builder() -> ChordBuilder {
         ChordBuilder {
@@ -205,6 +228,10 @@ impl Chord {
 
     pub fn cmd(&mut self) -> &mut bool {
         &mut self.cmd
+    }
+
+    pub fn set_key(&mut self, key: egui::Key) {
+        self.key = key
     }
 
     pub fn display_key(&self) -> &'static str {
@@ -297,14 +324,12 @@ impl FromStr for Chord {
 }
 
 impl Chord {
-    pub fn display(&self) -> String {
-        let mut buf = String::new();
-
+    pub fn display_modifiers(buf: &mut String, modifiers: &egui::Modifiers) {
         for repr in [
-            (self.cmd, "Cmd"),
-            (self.ctrl, "Ctrl"),
-            (self.alt, "Alt"),
-            (self.shift, "Shift"),
+            (modifiers.mac_cmd, "Cmd"),
+            (modifiers.ctrl, "Ctrl"),
+            (modifiers.alt, "Alt"),
+            (modifiers.shift, "Shift"),
         ]
         .into_iter()
         .filter_map(|(c, key)| c.then_some(key))
@@ -317,6 +342,20 @@ impl Chord {
         if !buf.is_empty() {
             buf.push('+')
         }
+    }
+
+    pub fn display(&self) -> String {
+        let mut buf = String::new();
+        Self::display_modifiers(
+            &mut buf,
+            &Modifiers {
+                alt: self.alt,
+                ctrl: self.ctrl,
+                shift: self.shift,
+                mac_cmd: self.cmd,
+                command: false,
+            },
+        );
 
         buf.push_str(KeyHelper::stringify_key(&self.key));
         buf

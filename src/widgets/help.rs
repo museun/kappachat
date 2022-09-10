@@ -1,13 +1,13 @@
 use egui::{Align, Key, Layout};
 
-use crate::{state::SettingsState, tabs::Tabs, EnvConfig, KeyMapping};
+use crate::{state::SettingsState, tabs::Tabs, EnvConfig, KeyMapping, State};
 
 #[derive(Default, Debug, PartialEq, Eq)]
 pub enum HelpView {
     KeyBindings,
     Settings,
     Twitch,
-    Autojoin,
+    Channels,
     #[default]
     None,
 }
@@ -22,14 +22,17 @@ pub struct Help<'a> {
 }
 
 impl<'a> Help<'a> {
-    pub fn new(
-        showing_help: &'a mut HelpView,
-        key_mapping: &'a mut KeyMapping,
-        settings_state: &'a mut SettingsState,
-        showing_tab_bar: &'a mut bool,
-        tabs: &'a mut Tabs,
-        config: &'a mut EnvConfig,
-    ) -> Self {
+    pub fn new(state: &'a mut State) -> Self {
+        let State {
+            settings_state,
+            config,
+            key_mapping,
+            tabs,
+            showing_tab_bar,
+            showing_help,
+            ..
+        } = state;
+
         Self {
             showing_help,
             key_mapping,
@@ -49,7 +52,7 @@ impl<'a> egui::Widget for Help<'a> {
             ui.selectable_value(self.showing_help, KeyBindings, "Key Bindings");
             ui.selectable_value(self.showing_help, Settings, "Settings");
             ui.selectable_value(self.showing_help, Twitch, "Twitch");
-            ui.selectable_value(self.showing_help, Autojoin, "Autojoin");
+            ui.selectable_value(self.showing_help, Channels, "Channels");
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 ui.button("close").clicked()
             })
@@ -60,7 +63,11 @@ impl<'a> egui::Widget for Help<'a> {
 
         match self.showing_help {
             KeyBindings => {
-                super::KeyBindings::new(self.key_mapping).ui(ui);
+                super::KeyBindings::new(
+                    self.key_mapping,
+                    &mut self.settings_state.keybindings_state,
+                )
+                .ui(ui);
             }
             Settings => {
                 super::Settings::new(self.settings_state, self.showing_tab_bar, self.tabs).ui(ui);
@@ -68,8 +75,12 @@ impl<'a> egui::Widget for Help<'a> {
             Twitch => {
                 super::TwitchSettings::new(self.config, self.settings_state).ui(ui);
             }
-            Autojoin => {
-                super::TwitchAutojoin::new(self.settings_state).ui(ui);
+            Channels => {
+                super::TwitchChannels::new(
+                    &mut self.settings_state.autojoin_state,
+                    &mut self.settings_state.channels,
+                )
+                .ui(ui);
             }
             _ => {}
         }

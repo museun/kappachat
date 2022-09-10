@@ -94,11 +94,14 @@ impl Tabs {
 }
 
 pub struct Tab {
-    title: String,
+    pub title: String,
+    pub line_mode: ChatLayout,
+
+    pub show_user_list: bool,
+    pub timestamp: bool,
+
     buffer: String,
-    show_user_list: bool,
-    timestamp: bool,
-    line_mode: ChatLayout,
+
     queue: crate::Queue<Line>,
     chatters: Chatters,
 }
@@ -118,30 +121,6 @@ impl Tab {
 
     pub fn buffer_mut(&mut self) -> &mut String {
         &mut self.buffer
-    }
-
-    pub fn title(&self) -> &str {
-        &self.title
-    }
-
-    pub const fn showing_user_list(&self) -> bool {
-        self.show_user_list
-    }
-
-    pub const fn showing_timestamp(&self) -> bool {
-        self.timestamp
-    }
-
-    pub fn showing_user_list_mut(&mut self) -> &mut bool {
-        &mut self.show_user_list
-    }
-
-    pub fn showing_timestamp_mut(&mut self) -> &mut bool {
-        &mut self.timestamp
-    }
-
-    pub const fn line_mode(&self) -> ChatLayout {
-        self.line_mode
     }
 
     pub fn next_line_mode(&mut self) {

@@ -235,7 +235,7 @@ pub struct Identity {
     pub color: Color,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct Tags {
     inner: HashMap<String, String>,
 }
@@ -273,7 +273,7 @@ impl Tags {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum Command {
     Ready,
     Ping,
@@ -300,7 +300,7 @@ impl Command {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum Prefix {
     User { name: String },
     Server { host: String },
@@ -414,14 +414,14 @@ pub enum TextKind<'a> {
     Text(Cow<'a, str>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Message {
     pub tags: Tags,
     pub prefix: Prefix,
     pub command: Command,
     pub args: Vec<String>,
     pub data: Option<String>,
-    pub(crate) raw: String,
+    pub raw: String,
 }
 
 impl Message {

@@ -1,98 +1,79 @@
-#![cfg_attr(debug_assertions, allow(dead_code, unused_variables,))]
+use eframe::{NativeOptions, Storage};
+use egui::{text::LayoutJob, CentralPanel, Color32, Event, Key, TextFormat, TextStyle, Widget};
 
-use std::time::Instant;
-
-use eframe::NativeOptions;
-use egui::{text::LayoutJob, CentralPanel, Color32, Event, TextFormat, TextStyle, Widget};
-use egui_extras::RetainedImage;
+use kappachat::{
+    helix, kappas, tabs, twitch,
+    widgets::{self, HelpView},
+    BorrowedPersistState, CachedImages, Command, EnvConfig, Interaction, KeyAction, Line,
+    PersistState, State, TwitchLine,
+};
 
 pub struct App {
-    interaction: Interaction,
     context: egui::Context,
-
-    twitch: Option<twitch::Twitch>,
-    identity: Option<twitch::Identity>,
-
-    config: EnvConfig,
-    key_mapping: KeyMapping,
+    interaction: Interaction,
 
     client: helix::Client,
     cached_images: CachedImages,
 
-    tabs: Tabs,
-    showing_tab_bar: bool,
-    showing_help: widgets::HelpView,
-    scroll: f32,
-
-    settings_state: SettingsState,
-
-    line: Option<String>,
-
-    last: Instant,
-    kappa_index: usize,
-    kappas: [RetainedImage; 5],
+    state: State,
 }
 
 impl App {
-    fn new(
-        context: egui::Context,
-        config: EnvConfig,
-        key_mapping: KeyMapping,
-        client: helix::Client,
-        cached_images: CachedImages,
-        pixels_per_point: f32,
-
-        kappas: [RetainedImage; 5],
-    ) -> Self {
+    fn new(context: egui::Context, state: State) -> Self {
         Self {
-            interaction: Interaction::create(),
             context,
+            interaction: Interaction::create(),
 
-            twitch: None,
-            identity: None,
+            client: helix::Client::default(),
+            cached_images: CachedImages::default(),
 
-            config,
-            key_mapping,
-
-            client,
-            cached_images,
-
-            tabs: Tabs::create(),
-            showing_tab_bar: true,
-            showing_help: widgets::HelpView::None,
-            scroll: 0.0,
-
-            line: None,
-
-            settings_state: SettingsState {
-                pixels_per_point,
-                ..SettingsState::default()
-            },
-
-            kappas,
-            kappa_index: 0,
-
-            last: Instant::now(),
+            state,
         }
     }
 
+    const fn verify_config(&self) -> bool {
+        let EnvConfig {
+            twitch_name: _twitch_name,
+            twitch_oauth_token: _twitch_oauth_token,
+            twitch_client_id: _twitch_client_id,
+            twitch_client_secret: _twitch_client_secret,
+        } = &self.state.config;
+
+        // if twitch_name.is_some()
+        //     & twitch_oauth_token.is_some()
+        //     & twitch_client_id.is_some()
+        //     & twitch_client_secret.is_some()
+        // {
+        //     return true;
+        // }
+
+        // TODO use the validators from the settings?
+
+        false
+    }
+
     fn connect(&mut self) -> anyhow::Result<()> {
-        if self.twitch.is_some() {
+        if !self.verify_config() {
+            self.show_twitch_settings();
+            return Ok(());
+        }
+
+        if self.state.twitch.is_some() {
             todo!("already connected")
         }
 
         let (client, identity) = {
             let reg = twitch::Registration {
                 address: "irc.chat.twitch.tv:6667",
-                nick: &self.config.twitch_name,
-                pass: &self.config.twitch_oauth_token,
+                nick: &self.state.config.twitch_name,
+                pass: &self.state.config.twitch_oauth_token,
             };
 
             twitch::Client::connect(reg)
         }?;
 
-        self.identity.replace(identity);
-        self.twitch.replace(
+        self.state.identity.replace(identity);
+        self.state.twitch.replace(
             client.spawn_listen(self.context.clone()), //
         );
 
@@ -101,8 +82,8 @@ impl App {
         Ok(())
     }
 
-    fn try_read(&mut self, ctx: &egui::Context) -> bool {
-        match &self.twitch {
+    fn try_read(&mut self) -> bool {
+        match &self.state.twitch {
             Some(twitch) => self
                 .interaction
                 .poll(twitch)
@@ -125,15 +106,18 @@ impl App {
                         .get_chatters_for(join.channel.strip_prefix('#').unwrap_or(join.channel))
                         .unwrap();
 
-                    self.tabs.get_mut(join.channel).update_chatters(chatters);
-                    self.tabs.set_active_by_name(join.channel)
+                    self.state
+                        .tabs
+                        .get_mut(join.channel)
+                        .update_chatters(chatters);
+                    self.state.tabs.set_active_by_name(join.channel)
                 }
             }
 
             Part => {
                 let part = msg.as_part().expect("part message should be valid");
                 if self.is_our_name(part.user) {
-                    self.tabs.remove_tab(part.channel);
+                    self.state.tabs.remove_tab(part.channel);
                 }
             }
 
@@ -158,7 +142,8 @@ impl App {
                     pm.data, spans,
                 )
                 .with_color(color);
-                self.tabs
+                self.state
+                    .tabs
                     .get_mut(&line.source)
                     .append(tabs::Line::Twitch { line });
             }
@@ -187,7 +172,7 @@ impl App {
     }
 
     fn identity(&self) -> &twitch::Identity {
-        self.identity.as_ref().expect("initialization")
+        self.state.identity.as_ref().expect("initialization")
     }
 
     fn is_our_name(&self, name: &str) -> bool {
@@ -195,11 +180,11 @@ impl App {
     }
 
     const fn is_connected(&self) -> bool {
-        self.twitch.is_some()
+        self.state.twitch.is_some()
     }
 
     fn report_error(&mut self, error: Line) {
-        self.tabs.get_mut("*status").append(error);
+        self.state.tabs.get_mut("*status").append(error);
     }
 
     fn create_error(&mut self, prefix: impl ToString, msg: impl AsRef<str>) {
@@ -226,6 +211,7 @@ impl App {
             return;
         }
 
+        // TODO get rid of all of this
         let cmd = Command::parse(line);
         if !self.check_if_connected(&cmd) {
             return;
@@ -233,7 +219,7 @@ impl App {
 
         match cmd {
             Command::Message { raw } => {
-                let target = &self.tabs.active().title();
+                let target = &self.state.tabs.active().title;
                 self.send_message(target, raw);
 
                 let twitch::Identity {
@@ -248,7 +234,10 @@ impl App {
                 )
                 .with_color(color);
 
-                self.tabs.active_mut().append(tabs::Line::Twitch { line });
+                self.state
+                    .tabs
+                    .active_mut()
+                    .append(tabs::Line::Twitch { line });
             }
 
             Command::Join { channel } => {
@@ -258,7 +247,7 @@ impl App {
             }
 
             Command::Part { channel } => {
-                let target = channel.unwrap_or_else(|| self.tabs.active().title());
+                let target = channel.unwrap_or_else(|| &self.state.tabs.active().title);
                 self.part_channel(target);
             }
 
@@ -278,44 +267,50 @@ impl App {
     }
 
     fn toggle_tab_bar(&mut self) {
-        self.showing_tab_bar = !self.showing_tab_bar;
+        self.state.showing_tab_bar = !self.state.showing_tab_bar;
     }
 
     fn toggle_user_list(&mut self) {
-        self.tabs.active_mut().toggle_user_list()
+        self.state.tabs.active_mut().toggle_user_list()
     }
 
     fn toggle_line_mode(&mut self) {
-        self.tabs.active_mut().next_line_mode()
+        self.state.tabs.active_mut().next_line_mode()
     }
 
     fn toggle_timestamps(&mut self) {
-        self.tabs.active_mut().toggle_timestamps()
+        self.state.tabs.active_mut().toggle_timestamps()
     }
 
     fn next_tab(&mut self) {
-        self.tabs.next_tab()
+        self.state.tabs.next_tab()
     }
 
     fn previous_tab(&mut self) {
-        self.tabs.previous_tab()
+        self.state.tabs.previous_tab()
     }
 
     fn toggle_help(&mut self) {
-        self.showing_help = if matches!(self.showing_help, widgets::HelpView::None) {
-            widgets::HelpView::KeyBindings
-        } else {
-            widgets::HelpView::None
-        }
+        self.state.showing_help = matches!(self.state.showing_help, HelpView::None)
+            .then_some(HelpView::KeyBindings)
+            .unwrap_or_default();
     }
 
     fn try_set_active_tab(&mut self, index: usize) {
-        self.tabs.set_active(index);
+        self.state.tabs.set_active(index);
     }
 
     fn try_handle_key_press(&mut self) {
-        let ctx = self.context.clone();
+        if self.context.input().events.is_empty() {
+            return;
+        }
 
+        if self.context.input().key_pressed(Key::F12) {
+            self.context
+                .set_debug_on_hover(!self.context.debug_on_hover())
+        }
+
+        let ctx = self.context.clone();
         for (key, modifiers) in ctx.input().events.iter().filter_map(|c| match c {
             &Event::Key {
                 key,
@@ -324,7 +319,7 @@ impl App {
             } if !pressed => Some((key, modifiers)),
             _ => None,
         }) {
-            if let Some(action) = self.key_mapping.find(key, modifiers) {
+            if let Some(action) = self.state.key_mapping.find(key, modifiers) {
                 eprintln!("action: {action:?}");
 
                 use KeyAction::*;
@@ -355,8 +350,12 @@ impl App {
 }
 
 impl App {
-    fn try_display_help(&mut self, ctx: &egui::Context) {
-        if matches!(self.showing_help, widgets::HelpView::None) {
+    fn show_twitch_settings(&mut self) {
+        self.state.showing_help = widgets::HelpView::Twitch;
+    }
+
+    fn try_display_help(&mut self) {
+        if matches!(self.state.showing_help, widgets::HelpView::None) {
             return;
         }
 
@@ -365,44 +364,30 @@ impl App {
             .resizable(false)
             .vscroll(true)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-            .show(ctx, |ui| {
-                widgets::Help::new(
-                    &mut self.showing_help,
-                    &mut self.key_mapping,
-                    &mut self.settings_state,
-                    &mut self.showing_tab_bar,
-                    &mut self.tabs,
-                    &mut self.config,
-                )
-                .ui(ui)
+            .show(&self.context, |ui| {
+                widgets::Help::new(&mut self.state).ui(ui)
             });
     }
 
-    fn try_display_tab_bar(&mut self, ctx: &egui::Context) {
-        if self.showing_tab_bar {
+    fn try_display_tab_bar(&mut self) {
+        if self.state.showing_tab_bar {
             egui::panel::TopBottomPanel::top("top")
                 .resizable(false)
-                .show(ctx, |ui| ui.add(&mut self.tabs));
+                .show(&self.context, |ui| ui.add(&mut self.state.tabs));
         }
     }
 
-    fn try_display_start_screen(&mut self, ctx: &egui::Context) -> bool {
+    fn try_display_start_screen(&mut self) -> bool {
         if self.is_connected() {
             return true;
         }
 
-        CentralPanel::default().show(ctx, |ui| {
-            widgets::StartScreen {
-                images: &self.kappas,
-                last: &mut self.last,
-                index: &mut self.kappa_index,
-                command: &mut self.settings_state.command,
-            }
-            .ui(ui)
+        CentralPanel::default().show(&self.context, |ui| {
+            widgets::StartScreen::new(&mut self.state).ui(ui)
         });
 
-        if let Some(Command::Connect) = &self.settings_state.command {
-            self.settings_state.command.take();
+        if let Some(Command::Connect) = &self.state.settings_state.command {
+            self.state.settings_state.command.take();
             self.connect().expect("connect") // TODO handle this
         };
 
@@ -410,7 +395,7 @@ impl App {
     }
 
     fn try_send_line(&mut self) {
-        if let Some(line) = &mut self.line {
+        if let Some(line) = &mut self.state.line {
             if !line.is_empty() {
                 let line = std::mem::take(line);
                 self.send_line(&line);
@@ -420,13 +405,13 @@ impl App {
 }
 
 impl eframe::App for App {
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        self.try_read(ctx);
+    fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
+        self.try_read();
 
         self.try_handle_key_press();
-        self.try_display_help(ctx);
+        self.try_display_help();
 
-        if !self.try_display_start_screen(ctx) {
+        if !self.try_display_start_screen() {
             return;
         }
 
@@ -434,32 +419,37 @@ impl eframe::App for App {
             .resizable(false)
             .frame(egui::Frame::none().fill(Color32::BLACK))
             .show(ctx, |ui| {
-                widgets::EditBox::new(&mut self.tabs, &mut self.line).ui(ui)
+                widgets::EditBox::new(&mut self.state.tabs, &mut self.state.line).ui(ui)
             });
 
         self.try_send_line();
 
-        self.try_display_tab_bar(ctx);
+        self.try_display_tab_bar();
 
         // TODO redo this
-        let pos = self.scroll;
-        self.scroll += ctx.input().scroll_delta.y;
+        let pos = self.state.scroll;
+        self.state.scroll += ctx.input().scroll_delta.y;
 
         egui::panel::CentralPanel::default().show(ctx, |ui| {
             widgets::TabWidget {
-                tab: self.tabs.active_mut(),
+                tab: self.state.tabs.active_mut(),
                 cached_images: &mut self.cached_images,
-                stick: pos != self.scroll,
+                stick: pos != self.state.scroll,
             }
             .ui(ui)
         });
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        storage.set_string(
-            "window_pixels_per_point",
-            self.settings_state.pixels_per_point.to_string(),
-        );
+        let data = BorrowedPersistState {
+            env_config: &self.state.config,
+            key_mapping: &self.state.key_mapping,
+            channels: &self.state.settings_state.channels,
+            pixels_per_point: &self.state.settings_state.pixels_per_point,
+        };
+
+        let s = serde_json::to_string(&data).expect("valid json");
+        storage.set_string(SETTINGS_KEY, s);
     }
 
     fn persist_native_window(&self) -> bool {
@@ -467,74 +457,53 @@ impl eframe::App for App {
     }
 }
 
-pub trait RequestPaint: Send + Sync {
-    fn request_repaint(&self) {}
-}
+const SETTINGS_KEY: &str = "kappa_chat_settings";
 
-impl RequestPaint for egui::Context {
-    fn request_repaint(&self) {
-        Self::request_repaint(self)
+const DEFAULT_PIXELS_PER_POINT: f32 = 1.0;
+
+fn load_settings(state: &mut PersistState, storage: &dyn Storage) {
+    let mut deser = match storage
+        .get_string(SETTINGS_KEY)
+        .as_deref()
+        .map(serde_json::from_str::<PersistState>)
+        .transpose()
+        .ok()
+        .flatten()
+    {
+        Some(deser) => deser,
+        None => return,
+    };
+
+    state.pixels_per_point = deser.pixels_per_point;
+    state.channels = deser.channels;
+    state.key_mapping = deser.key_mapping;
+
+    fn maybe_update<'a: 'e, 'b: 'e, 'e>(
+        left: &'a mut EnvConfig,
+        right: &'b mut EnvConfig,
+        extract: fn(&'e mut EnvConfig) -> &'e mut String,
+    ) {
+        let left = extract(left);
+        let right = extract(right);
+        if left.trim().is_empty() {
+            *left = std::mem::take(right)
+        }
+    }
+
+    for extract in [
+        (move |e| &mut e.twitch_oauth_token) as fn(&mut EnvConfig) -> &mut String,
+        (move |e| &mut e.twitch_name) as fn(&mut EnvConfig) -> &mut String,
+        (move |e| &mut e.twitch_client_id) as fn(&mut EnvConfig) -> &mut String,
+        (move |e| &mut e.twitch_client_secret) as fn(&mut EnvConfig) -> &mut String,
+    ] {
+        maybe_update(&mut state.env_config, &mut deser.env_config, extract);
     }
 }
 
-pub struct NoopRepaint;
-impl RequestPaint for NoopRepaint {}
-
-mod state;
-use state::SettingsState;
-
-mod widgets;
-
-mod action;
-
-mod command;
-use command::Command;
-
-mod config;
-pub use config::EnvConfig;
-
-mod key_mapping;
-pub use key_mapping::{Chord, KeyAction, KeyHelper, KeyMapping};
-
-mod helix;
-use helix::CachedImages;
-
-mod tabs;
-use tabs::{Line, Tabs};
-
-mod line;
-use line::TwitchLine;
-
-mod chat_layout;
-use chat_layout::ChatLayout;
-
-mod queue;
-use queue::Queue;
-
-mod twitch;
-
-mod ext;
-pub use ext::JobExt as _;
-
-mod interaction;
-pub use interaction::Interaction;
-
-mod kappas;
-
 fn main() -> anyhow::Result<()> {
-    simple_env_load::load_env_from([".dev.env", ".secrets.env"]);
-
-    let env_config = EnvConfig::load_from_env()?;
-
-    // TODO this should be done in the background, it does an http request
-    let client = helix::Client::fake(
-        &env_config.twitch_client_id,
-        &env_config.twitch_client_secret,
-    )?;
+    simple_env_load::load_env_from([".dev.env"]); //".secrets.env"
 
     // let mut cached = CachedImages::load_from("./data");
-
-    let cached = CachedImages::default();
 
     // let json = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", "badges.json"));
     // #[derive(serde::Deserialize)]
@@ -547,45 +516,26 @@ fn main() -> anyhow::Result<()> {
 
     // cached.merge_badges(&badges);
 
-    let mut key_mapping = None;
-
-    let mut pixels_per_point = 1.0;
-
     let kappas = kappas::load_kappas();
+
+    let mut state = PersistState {
+        env_config: EnvConfig::load_from_env(),
+        pixels_per_point: DEFAULT_PIXELS_PER_POINT,
+        ..Default::default()
+    };
 
     eframe::run_native(
         "KappaChat",
-        NativeOptions {
-            ..Default::default()
-        },
+        NativeOptions::default(),
         Box::new(move |cc| {
             if let Some(storage) = cc.storage {
-                if let Some(ppp) = storage
-                    .get_string("window_pixels_per_point")
-                    .and_then(|s| s.parse().ok())
-                {
-                    eprintln!("setting pixels per point: {ppp:.1}");
-                    cc.egui_ctx.set_pixels_per_point(ppp);
-                    pixels_per_point = ppp
-                }
-
-                if let Some(keys) = storage
-                    .get_string("keybindings")
-                    .and_then(|s| serde_yaml::from_str(&s).ok())
-                {
-                    key_mapping.replace(keys);
-                }
+                load_settings(&mut state, storage);
             }
 
-            Box::new(App::new(
-                cc.egui_ctx.clone(),
-                env_config,
-                key_mapping.unwrap_or_default(),
-                client,
-                cached,
-                pixels_per_point,
-                kappas,
-            ))
+            cc.egui_ctx.set_pixels_per_point(state.pixels_per_point);
+
+            let state = State::new(kappas, state);
+            Box::new(App::new(cc.egui_ctx.clone(), state))
         }),
     );
 

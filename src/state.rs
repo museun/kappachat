@@ -1,17 +1,19 @@
 use std::collections::HashMap;
 
-use egui::Id;
-
-use crate::command::Command;
+use crate::{
+    command::Command,
+    widgets::{ChannelState, KeyBindingsState},
+    Channel,
+};
 
 #[derive(Default)]
 pub struct SettingsState {
     pub pixels_per_point: f32,
-    pub channels: Vec<String>,
-    pub channels_to_remove: Vec<String>,
-    pub adding_channel_id: Option<Id>,
-    pub adding_channel: Option<String>,
     pub twitch_visible: HashMap<u64, bool>,
+    pub channels: Vec<Channel>,
+
+    pub keybindings_state: KeyBindingsState,
+    pub autojoin_state: ChannelState,
 
     pub command: Option<Command<'static>>,
 }

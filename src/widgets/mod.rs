@@ -1,5 +1,5 @@
 mod start_screen;
-pub use start_screen::StartScreen;
+pub use start_screen::{StartRotation, StartScreen};
 
 mod help;
 pub use help::{Help, HelpView};
@@ -16,23 +16,17 @@ pub use tabs::TabsWidget;
 mod tab;
 pub use tab::TabWidget;
 
-mod channel_settings;
-pub use channel_settings::ChannelSettings;
-
-mod display_settings;
-pub use display_settings::DisplaySettings;
-
 mod settings;
 pub use settings::Settings;
 
-mod twitch_autojoin;
-pub use twitch_autojoin::TwitchAutojoin;
+mod channels;
+pub use channels::{ChannelState, TwitchChannels};
 
 mod twitch_settings;
 pub use twitch_settings::TwitchSettings;
 
 mod key_bindings;
-pub use key_bindings::KeyBindings;
+pub use key_bindings::{KeyBindings, KeyBindingsState};
 
 mod edit_box;
 pub use edit_box::EditBox;

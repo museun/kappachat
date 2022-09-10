@@ -1,17 +1,27 @@
 use egui::{text::LayoutJob, Color32, FontId, TextFormat};
 
 pub trait JobExt: Sized {
-    fn just_text(self, text: &str, font_id: FontId) -> Self {
-        self.simple(text, font_id, Color32::WHITE)
-    }
+    fn simple_with_space<C>(self, text: &str, font_id: FontId, color: C, space: f32) -> Self
+    where
+        C: Into<Color32>;
 
     fn simple<C>(self, text: &str, font_id: FontId, color: C) -> Self
     where
-        C: Into<Color32>;
+        C: Into<Color32>,
+    {
+        self.simple_with_space(text, font_id, color, 3.0)
+    }
+
+    fn simple_no_space<C>(self, text: &str, font_id: FontId, color: C) -> Self
+    where
+        C: Into<Color32>,
+    {
+        self.simple_with_space(text, font_id, color, 0.0)
+    }
 }
 
 impl JobExt for LayoutJob {
-    fn simple<C>(mut self, text: &str, font_id: FontId, color: C) -> Self
+    fn simple_with_space<C>(mut self, text: &str, font_id: FontId, color: C, space: f32) -> Self
     where
         C: Into<Color32>,
     {
@@ -20,7 +30,7 @@ impl JobExt for LayoutJob {
             color: color.into(),
             ..Default::default()
         };
-        self.append(text, 3.0, fmt);
+        self.append(text, space, fmt);
         self
     }
 }
