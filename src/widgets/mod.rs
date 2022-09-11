@@ -17,7 +17,7 @@ mod edit_box;
 pub use edit_box::EditBox;
 
 mod main;
-pub use main::{MainView, MainWidget};
+pub use main::{MainView, MainViewState};
 
 mod keybind_settings;
 pub use keybind_settings::{KeybindSettings, KeybindingsState};

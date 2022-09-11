@@ -7,7 +7,7 @@ use kappachat::{
     helix, kappas,
     state::{AppState, BorrowedPersistState, PersistState},
     tabs, twitch,
-    widgets::{self, MainWidget},
+    widgets::{self, MainView},
     CachedImages, EnvConfig, Interaction, KeyAction, TwitchLine,
 };
 
@@ -64,7 +64,7 @@ impl App {
             Some(twitch) => self
                 .interaction
                 .poll(twitch)
-                .expect("FIXME: this should reset the state"),
+                .expect("FIXME: this should reset the state"), // XXX: what does this mean?
             _ => return false,
         }
 
@@ -189,23 +189,28 @@ impl App {
     }
 
     fn switch_to_settings(&mut self) {
-        if matches!(self.app.state.current_view, widgets::MainView::Settings) {
+        if matches!(
+            self.app.state.current_view,
+            widgets::MainViewState::Settings
+        ) {
             return;
         }
 
         self.app.state.previous_view = std::mem::replace(
             &mut self.app.state.current_view,
-            widgets::MainView::Settings,
+            widgets::MainViewState::Settings,
         );
     }
 
     fn switch_to_main(&mut self) {
-        if matches!(self.app.state.current_view, widgets::MainView::Main) {
+        if matches!(self.app.state.current_view, widgets::MainViewState::Main) {
             return;
         }
 
-        self.app.state.previous_view =
-            std::mem::replace(&mut self.app.state.current_view, widgets::MainView::Main);
+        self.app.state.previous_view = std::mem::replace(
+            &mut self.app.state.current_view,
+            widgets::MainViewState::Main,
+        );
     }
 
     fn try_handle_key_press(&mut self) {
@@ -267,7 +272,9 @@ impl eframe::App for App {
         self.try_handle_key_press();
 
         CentralPanel::default().show(ctx, |ui| {
-            MainWidget::new(&mut self.app.state).display(ui);
+            if MainView::new(&mut self.app.state).display(ui) {
+                // connect
+            }
         });
     }
 

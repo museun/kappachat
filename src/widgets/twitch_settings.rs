@@ -2,9 +2,24 @@ use std::{borrow::Cow, collections::HashMap};
 
 use egui::{Align, Grid, Label, Layout, RichText, TextEdit};
 
-#[derive(Default)]
 pub struct TwitchSettingsState {
     show_password: HashMap<u64, bool>,
+    seems_good: [bool; 4],
+}
+
+impl Default for TwitchSettingsState {
+    fn default() -> Self {
+        Self {
+            show_password: Default::default(),
+            seems_good: [true; 4],
+        }
+    }
+}
+
+impl TwitchSettingsState {
+    pub fn seems_good(&self) -> bool {
+        self.seems_good == [true; 4]
+    }
 }
 
 use crate::{state::State, EnvConfig};
@@ -28,13 +43,15 @@ impl<'a> TwitchSettings<'a> {
             .num_columns(2)
             .striped(true)
             .show(ui, |ui| {
-                for ((label, validator, label_maker), (value, password)) in
-                    Self::LABELS.into_iter().zip([
+                for (i, ((label, validator, label_maker), (value, password))) in Self::LABELS
+                    .into_iter()
+                    .zip([
                         (&mut self.config.twitch_name, false),
                         (&mut self.config.twitch_oauth_token, true),
                         (&mut self.config.twitch_client_id, false),
                         (&mut self.config.twitch_client_secret, true),
                     ])
+                    .enumerate()
                 {
                     match validator(value).display() {
                         Some(requirements) => {
@@ -47,9 +64,11 @@ impl<'a> TwitchSettings<'a> {
                             .on_hover_text_at_pointer({
                                 RichText::new(requirements).color(ui.visuals().warn_fg_color)
                             });
+                            self.state.seems_good[i] = false;
                         }
                         None => {
                             ui.monospace(label).on_hover_ui_at_pointer(label_maker);
+                            self.state.seems_good[i] = true;
                         }
                     }
 

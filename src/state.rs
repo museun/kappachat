@@ -3,7 +3,7 @@ use std::hash::{Hash, Hasher};
 use crate::{
     twitch,
     widgets::{
-        KeybindingsState, MainView, SettingsState, StartState, TwitchChannelsState,
+        KeybindingsState, MainViewState, SettingsState, StartState, TwitchChannelsState,
         TwitchSettingsState,
     },
     Channel, EnvConfig, KeyMapping, Tabs,
@@ -19,8 +19,8 @@ pub struct State {
     pub twitch_channels: TwitchChannelsState,
     pub twitch_settings: TwitchSettingsState,
     pub keybind_state: KeybindingsState,
-    pub current_view: MainView,
-    pub previous_view: MainView,
+    pub current_view: MainViewState,
+    pub previous_view: MainViewState,
     pub start_state: StartState,
 }
 
@@ -48,6 +48,7 @@ pub struct AppState {
 
 impl AppState {
     // TODO redo this
+    // XXX almost done redoing it
     pub fn new(kappas: Vec<egui_extras::RetainedImage>, persist: PersistState) -> Self {
         Self {
             twitch: None,

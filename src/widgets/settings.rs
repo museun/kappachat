@@ -26,6 +26,10 @@ impl<'a> SettingsView<'a> {
         Self { state }
     }
 
+    pub fn activate(state: &'a mut State, view: ActiveSettingsView) {
+        state.settings.active = view;
+    }
+
     pub fn display(self, ui: &mut egui::Ui) -> bool {
         use ActiveSettingsView::*;
 

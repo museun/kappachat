@@ -92,7 +92,7 @@ impl<'a> StartView<'a> {
 }
 
 impl<'a> StartView<'a> {
-    pub fn display(mut self, ui: &mut egui::Ui) {
+    pub fn display(mut self, ui: &mut egui::Ui) -> bool {
         self.pick_random();
 
         ui.ctx().request_repaint_after(Self::DELAY);
@@ -153,12 +153,8 @@ impl<'a> StartView<'a> {
                 self.state.start_rotation.rotate_ccw(rot, ui.ctx());
             }
 
-            if resp.clicked() {
-                // TODO use a channel for this
-                eprintln!("Kappa")
-                // self.command.replace(Command::Connect);
-            }
-            resp
-        });
+            resp.clicked()
+        })
+        .inner
     }
 }
