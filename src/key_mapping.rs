@@ -347,10 +347,8 @@ impl Chord {
             buf.push_str(repr)
         }
 
-        if *modifiers != egui::Modifiers::NONE {
-            if !buf.is_empty() {
-                buf.push('+')
-            }
+        if *modifiers != egui::Modifiers::NONE && !buf.is_empty() {
+            buf.push('+')
         }
     }
 

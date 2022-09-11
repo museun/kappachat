@@ -1,9 +1,9 @@
 use eframe::{NativeOptions, Storage};
-use egui::{text::LayoutJob, CentralPanel, Color32, Event, Key, TextFormat, TextStyle, Widget};
+use egui::{text::LayoutJob, CentralPanel, Color32, Event, Key, TextFormat, TextStyle};
 
 use kappachat::{
     helix, kappas, tabs, twitch,
-    widgets::{self, ActiveSettingsView, MainWidget, SettingsView},
+    widgets::{self, MainWidget},
     AppState, BorrowedPersistState, CachedImages, Command, EnvConfig, Interaction, KeyAction, Line,
     PersistState, TwitchLine,
 };

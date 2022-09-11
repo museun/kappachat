@@ -2,7 +2,7 @@ use egui::ScrollArea;
 
 use crate::state::State;
 
-#[derive(Default, PartialEq, PartialOrd)]
+#[derive(Default, PartialEq, PartialOrd, Eq, Ord)]
 pub enum ActiveSettingsView {
     #[default]
     Channels,

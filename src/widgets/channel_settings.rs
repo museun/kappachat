@@ -52,10 +52,8 @@ impl<'a> ChannelSettings<'a> {
                     })
                 }
 
-                if resp.lost_focus() {
-                    if ui.ctx().input().key_pressed(Key::Enter) {
-                        self.try_add_channel(ui);
-                    }
+                if resp.lost_focus() && ui.ctx().input().key_pressed(Key::Enter) {
+                    self.try_add_channel(ui);
                 }
                 resp.request_focus();
             });
@@ -107,7 +105,7 @@ impl<'a> ChannelSettings<'a> {
             });
 
         if let Some(remove) = self.state.remove.take() {
-            if let Some(pos) = self.channels.iter().position(|c| &c.name == &remove) {
+            if let Some(pos) = self.channels.iter().position(|c| c.name == remove) {
                 self.channels.remove(pos);
             }
         }

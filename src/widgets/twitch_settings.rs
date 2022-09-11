@@ -36,7 +36,7 @@ impl<'a> TwitchSettings<'a> {
                         (&mut self.config.twitch_client_secret, true),
                     ])
                 {
-                    match validator(&value).display() {
+                    match validator(value).display() {
                         Some(requirements) => {
                             ui.add(Label::new(
                                 RichText::new(label)

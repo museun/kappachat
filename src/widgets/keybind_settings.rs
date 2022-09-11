@@ -157,7 +157,7 @@ impl<'a> KeybindSettings<'a> {
             }
 
             ui.horizontal(|ui| {
-                Self::display_label(&mut self.state, action, ui);
+                Self::display_label(self.state, action, ui);
 
                 ui.vertical(|ui| {
                     if chords.is_empty() {
@@ -443,11 +443,7 @@ impl<'a> KeybindSettings<'a> {
             let _ = write!(
                 &mut self.state.buffer,
                 "{}",
-                serde_yaml::to_string(&Binding {
-                    action: &action,
-                    chords: &chords
-                })
-                .unwrap()
+                serde_yaml::to_string(&Binding { action, chords }).unwrap()
             );
         }
     }

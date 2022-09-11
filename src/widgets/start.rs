@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use egui::{vec2, Align2, Color32, Direction, Layout, Pos2, Rect, Sense, Vec2};
+use egui::{vec2, Direction, Layout, Pos2, Rect, Sense, Vec2};
 
 use crate::RequestPaint;
 

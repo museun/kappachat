@@ -4,22 +4,6 @@ use egui::Color32;
 
 pub const TWITCH_COLOR: Color32 = Color32::from_rgb(146, 86, 237);
 
-pub fn get_small_font_id(ui: &egui::Ui) -> egui::FontId {
-    egui::TextStyle::Small.resolve(&*ui.style())
-}
-pub fn get_body_font_id(ui: &egui::Ui) -> egui::FontId {
-    egui::TextStyle::Body.resolve(&*ui.style())
-}
-pub fn get_monospace_font_id(ui: &egui::Ui) -> egui::FontId {
-    egui::TextStyle::Monospace.resolve(&*ui.style())
-}
-pub fn get_button_font_id(ui: &egui::Ui) -> egui::FontId {
-    egui::TextStyle::Button.resolve(&*ui.style())
-}
-pub fn get_heading_font_id(ui: &egui::Ui) -> egui::FontId {
-    egui::TextStyle::Heading.resolve(&*ui.style())
-}
-
 pub trait RequestPaint: Send + Sync {
     fn request_repaint(&self) {}
 }
