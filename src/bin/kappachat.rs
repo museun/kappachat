@@ -189,28 +189,18 @@ impl App {
     }
 
     fn switch_to_settings(&mut self) {
-        if matches!(
-            self.app.state.current_view,
-            widgets::MainViewState::Settings
-        ) {
-            return;
-        }
-
-        self.app.state.previous_view = std::mem::replace(
-            &mut self.app.state.current_view,
-            widgets::MainViewState::Settings,
-        );
+        self.switch_to_view(widgets::MainViewState::Settings)
     }
 
     fn switch_to_main(&mut self) {
-        if matches!(self.app.state.current_view, widgets::MainViewState::Main) {
+        self.switch_to_view(widgets::MainViewState::Main)
+    }
+
+    fn switch_to_view(&mut self, view: widgets::MainViewState) {
+        if self.app.state.current_view == view {
             return;
         }
-
-        self.app.state.previous_view = std::mem::replace(
-            &mut self.app.state.current_view,
-            widgets::MainViewState::Main,
-        );
+        self.app.state.previous_view = std::mem::replace(&mut self.app.state.current_view, view);
     }
 
     fn try_handle_key_press(&mut self) {
@@ -219,8 +209,9 @@ impl App {
         }
 
         if self.context.input().key_pressed(Key::F12) {
-            self.context
-                .set_debug_on_hover(!self.context.debug_on_hover())
+            self.context.set_debug_on_hover(
+                !self.context.debug_on_hover(), //
+            )
         }
 
         if self.app.state.keybind_state.is_capturing() {
@@ -238,6 +229,9 @@ impl App {
         }) {
             if let Some(action) = self.app.state.key_mapping.find(key, modifiers) {
                 use KeyAction::*;
+
+                eprintln!("action: {action:?}");
+
                 match action {
                     SwitchToSettings => self.switch_to_settings(),
                     SwitchToMain => self.switch_to_main(),
@@ -286,8 +280,8 @@ impl eframe::App for App {
             pixels_per_point: &self.app.state.pixels_per_point,
         };
 
-        let s = serde_json::to_string(&data).expect("valid json");
-        storage.set_string(SETTINGS_KEY, s);
+        let json = serde_json::to_string(&data).expect("valid json");
+        storage.set_string(SETTINGS_KEY, json);
     }
 
     fn persist_native_window(&self) -> bool {
@@ -338,7 +332,7 @@ fn load_settings(state: &mut PersistState, storage: &dyn Storage) {
 }
 
 fn main() -> anyhow::Result<()> {
-    simple_env_load::load_env_from([".dev.env"]); //".secrets.env"
+    simple_env_load::load_env_from([".dev.env", ".secrets.env"]); //".secrets.env"
 
     // let mut cached = CachedImages::load_from("./data");
 
