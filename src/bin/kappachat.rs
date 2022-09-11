@@ -1,3 +1,5 @@
+#![cfg_attr(debug_assertions, allow(dead_code, unused_variables,))]
+
 use eframe::{NativeOptions, Storage};
 use egui::{CentralPanel, Event, Key};
 

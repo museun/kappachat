@@ -21,8 +21,6 @@ pub mod state;
 
 pub mod widgets;
 
-mod action;
-
 mod config;
 pub use config::EnvConfig;
 
