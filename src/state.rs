@@ -1,41 +1,33 @@
-use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 
 use crate::{
-    command::Command,
-    widgets::{ChannelState, KeyBindingsState},
-    Channel,
+    widgets::{
+        KeybindingsState, MainView, SettingsState, StartState, TwitchChannelsState,
+        TwitchSettingsState,
+    },
+    Channel, EnvConfig, KeyMapping,
 };
 
 #[derive(Default)]
-pub struct SettingsState {
-    pub pixels_per_point: f32,
-    pub twitch_visible: HashMap<u64, bool>,
+pub struct State {
+    pub config: EnvConfig,
     pub channels: Vec<Channel>,
-
-    pub keybindings_state: KeyBindingsState,
-    pub autojoin_state: ChannelState,
-
-    pub command: Option<Command<'static>>,
+    pub settings: SettingsState,
+    pub pixels_per_point: f32,
+    pub key_mapping: KeyMapping,
+    pub twitch_channels: TwitchChannelsState,
+    pub twitch_settings: TwitchSettingsState,
+    pub keybind_state: KeybindingsState,
+    pub current_view: MainView,
+    pub previous_view: MainView,
+    pub start_state: StartState,
 }
 
-impl SettingsState {
-    pub fn make_hash(input: &str) -> u64 {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash as _, Hasher as _};
-        let mut hasher = DefaultHasher::new();
-        input.hash(&mut hasher);
-        hasher.finish()
-    }
-
-    pub fn dpi_repr(f: f32) -> &'static str {
-        const LOOKUP: [&str; 11] = [
-            "1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8", "1.9", "2.0",
-        ];
-        let index = ((f * 10.0) as usize) - 10;
-        LOOKUP[index]
-    }
-
-    pub fn dpi_range() -> impl Iterator<Item = f32> {
-        std::iter::successors(Some(1.0_f32), |a| Some(a + 0.1)).take(11)
+impl State {
+    pub fn make_hash(input: impl Hash) -> u64 {
+        use std::collections::hash_map::DefaultHasher as H;
+        let mut state = H::new();
+        input.hash(&mut state);
+        state.finish()
     }
 }

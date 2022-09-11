@@ -1,8 +1,5 @@
-mod start_screen;
-pub use start_screen::{StartRotation, StartScreen};
-
-mod help;
-pub use help::{Help, HelpView};
+mod start;
+pub use start::{StartState, StartView};
 
 mod line;
 pub use line::LineWidget;
@@ -16,17 +13,23 @@ pub use tabs::TabsWidget;
 mod tab;
 pub use tab::TabWidget;
 
-mod settings;
-pub use settings::Settings;
-
-mod channels;
-pub use channels::{ChannelState, TwitchChannels};
-
-mod twitch_settings;
-pub use twitch_settings::TwitchSettings;
-
-mod key_bindings;
-pub use key_bindings::{KeyBindings, KeyBindingsState};
-
 mod edit_box;
 pub use edit_box::EditBox;
+
+mod main;
+pub use main::{MainView, MainWidget};
+
+mod keybind_settings;
+pub use keybind_settings::{KeybindSettings, KeybindingsState};
+
+mod display_settings;
+pub use display_settings::DisplaySettings;
+
+mod channel_settings;
+pub use channel_settings::{ChannelSettings, TwitchChannelsState};
+
+mod twitch_settings;
+pub use twitch_settings::{TwitchSettings, TwitchSettingsState};
+
+mod settings;
+pub use settings::{ActiveSettingsView, SettingsState, SettingsView};

@@ -1,5 +1,7 @@
 #![cfg_attr(debug_assertions, allow(dead_code, unused_variables,))]
 
+use egui::Color32;
+
 pub const TWITCH_COLOR: Color32 = Color32::from_rgb(146, 86, 237);
 
 pub fn get_small_font_id(ui: &egui::Ui) -> egui::FontId {
@@ -32,8 +34,6 @@ pub struct NoopRepaint;
 impl RequestPaint for NoopRepaint {}
 
 mod state;
-use egui::Color32;
-pub use state::SettingsState;
 
 pub mod widgets;
 
@@ -52,6 +52,7 @@ pub mod helix;
 pub use helix::CachedImages;
 
 pub mod tabs;
+use state::State;
 pub use tabs::{Line, Tabs};
 
 mod line;
@@ -70,6 +71,7 @@ pub use ext::JobExt as _;
 
 mod interaction;
 pub use interaction::Interaction;
+use widgets::StartState;
 
 pub mod kappas;
 
@@ -126,50 +128,40 @@ impl Channel {
     }
 }
 
-pub struct State {
+pub struct AppState {
     pub twitch: Option<twitch::Twitch>,
     pub identity: Option<twitch::Identity>,
-    pub settings_state: SettingsState,
-
-    pub config: EnvConfig,
-    pub key_mapping: KeyMapping,
+    pub state: State,
 
     pub line: Option<String>,
-
-    pub last: std::time::Instant,
-    pub kappa_index: usize,
-    pub kappas: [egui_extras::RetainedImage; 5],
-
-    pub start_rotation: widgets::StartRotation,
 
     pub scroll: f32,
 
     pub tabs: Tabs,
     pub showing_tab_bar: bool,
-    pub showing_help: widgets::HelpView,
 }
 
-impl State {
-    pub fn new(kappas: [egui_extras::RetainedImage; 5], persist: PersistState) -> Self {
+impl AppState {
+    // TODO redo this
+    pub fn new(kappas: Vec<egui_extras::RetainedImage>, persist: PersistState) -> Self {
         Self {
             twitch: None,
             identity: None,
-            settings_state: SettingsState {
+            state: State {
                 pixels_per_point: persist.pixels_per_point,
                 channels: persist.channels,
-                ..SettingsState::default()
+                config: persist.env_config,
+                key_mapping: persist.key_mapping,
+                start_state: StartState {
+                    kappas,
+                    ..Default::default()
+                },
+                ..Default::default()
             },
-            config: persist.env_config,
-            key_mapping: persist.key_mapping,
             line: None,
-            last: std::time::Instant::now(),
-            kappa_index: 0,
-            kappas,
-            start_rotation: widgets::StartRotation::new(),
             scroll: 0.0,
             tabs: Tabs::create(),
             showing_tab_bar: false,
-            showing_help: widgets::HelpView::default(),
         }
     }
 }

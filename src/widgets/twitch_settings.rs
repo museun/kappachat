@@ -1,73 +1,90 @@
-use egui::{text::LayoutJob, Align, Grid, Key, Label, Layout, RichText, TextEdit};
+use std::{borrow::Cow, collections::HashMap};
 
-use crate::{ext::JobExt, state::SettingsState, EnvConfig};
+use egui::{Align, Grid, Label, Layout, RichText, TextEdit};
 
-pub struct TwitchSettings<'a, 'b> {
-    config: &'a mut EnvConfig,
-    settings_state: &'b mut SettingsState,
+#[derive(Default)]
+pub struct TwitchSettingsState {
+    show_password: HashMap<u64, bool>,
 }
 
-impl<'a, 'b> TwitchSettings<'a, 'b> {
-    pub fn new(config: &'a mut EnvConfig, settings_state: &'b mut SettingsState) -> Self {
-        Self {
-            config,
-            settings_state,
-        }
+use crate::{state::State, EnvConfig};
+
+pub struct TwitchSettings<'a> {
+    config: &'a mut EnvConfig,
+    state: &'a mut TwitchSettingsState,
+}
+
+impl<'a> TwitchSettings<'a> {
+    pub fn new(config: &'a mut EnvConfig, state: &'a mut TwitchSettingsState) -> Self {
+        Self { config, state }
+    }
+
+    fn id() -> &'static str {
+        std::any::type_name::<Self>()
+    }
+
+    pub fn display(self, ui: &mut egui::Ui) {
+        Grid::new(Self::id())
+            .num_columns(2)
+            .striped(true)
+            .show(ui, |ui| {
+                for ((label, validator, label_maker), (value, password)) in
+                    Self::LABELS.into_iter().zip([
+                        (&mut self.config.twitch_name, false),
+                        (&mut self.config.twitch_oauth_token, true),
+                        (&mut self.config.twitch_client_id, false),
+                        (&mut self.config.twitch_client_secret, true),
+                    ])
+                {
+                    match validator(&value).display() {
+                        Some(requirements) => {
+                            ui.add(Label::new(
+                                RichText::new(label)
+                                    .monospace()
+                                    .color(ui.visuals().error_fg_color),
+                            ))
+                            .on_hover_ui_at_pointer(label_maker)
+                            .on_hover_text_at_pointer({
+                                RichText::new(requirements).color(ui.visuals().warn_fg_color)
+                            });
+                        }
+                        None => {
+                            ui.monospace(label).on_hover_ui_at_pointer(label_maker);
+                        }
+                    }
+
+                    let key = State::make_hash(label);
+
+                    let show_password = &mut self.state.show_password;
+                    let is_pass = show_password.get(&key).copied().unwrap_or(password);
+
+                    ui.horizontal(|ui| {
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            ui.add_visible_ui(password, |ui| {
+                                let down = ui
+                                    .small_button(crate::font_icon::HIDDEN)
+                                    .is_pointer_button_down_on();
+                                if password {
+                                    *show_password.entry(key).or_insert(true) = !down;
+                                }
+                            });
+
+                            ui.add(TextEdit::singleline(value).password(is_pass));
+                        });
+                    });
+
+                    ui.end_row()
+                }
+            });
     }
 
     fn label_for_name(ui: &mut egui::Ui) {
-        ui.label({
-            let font_id = crate::get_heading_font_id(ui);
-            LayoutJob::default()
-                .simple_no_space(
-                    "Your name on",
-                    font_id.clone(),
-                    ui.visuals().strong_text_color(),
-                )
-                .simple("Twitch", font_id, crate::TWITCH_COLOR)
-        });
-
-        ui.label({
-            let font_id = crate::get_body_font_id(ui);
-            LayoutJob::default()
-                .simple_no_space(
-                    "This is associated with your",
-                    font_id.clone(),
-                    ui.visuals().text_color(),
-                )
-                .simple(
-                    "OAuth token",
-                    font_id.clone(),
-                    ui.visuals().strong_text_color(),
-                )
-        });
+        ui.label("Your name on Twitch");
+        ui.label("This is associated with your OAuth token");
     }
 
     fn label_for_oauth_token(ui: &mut egui::Ui) {
-        ui.label({
-            let font_id = crate::get_heading_font_id(ui);
-            LayoutJob::default().simple_no_space(
-                "A OAuth token associated with your name.",
-                font_id.clone(),
-                ui.visuals().strong_text_color(),
-            )
-        });
-
-        ui.label({
-            let font_id = crate::get_body_font_id(ui);
-            LayoutJob::default()
-                .simple_no_space(
-                    "This should be in the form of:\n",
-                    font_id.clone(),
-                    ui.visuals().text_color(),
-                )
-                .simple_no_space("oauth:", font_id.clone(), ui.visuals().strong_text_color())
-                .simple_no_space(
-                    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-                    font_id.clone(),
-                    ui.visuals().weak_text_color(),
-                )
-        });
+        ui.label("A OAuth token associated with your name.");
     }
 
     fn label_for_client_id(ui: &mut egui::Ui) {
@@ -78,147 +95,85 @@ impl<'a, 'b> TwitchSettings<'a, 'b> {
         ui.label("Client-Secret associated with the Client-Id");
     }
 
-    fn validate_name(input: &str) -> bool {
-        !(input.is_empty() || input.chars().any(|c| c.is_ascii_whitespace()))
+    fn validate_name(input: &str) -> Validation {
+        use Validation::*;
+        match () {
+            _ if input.is_empty() => CannotBeEmpty,
+            _ if input.chars().any(|c| c.is_ascii_whitespace()) => CannotContainSpaces,
+            _ => Valid,
+        }
     }
 
-    fn validate_oauth_token(input: &str) -> bool {
-        input.starts_with("oauth:") && input.len() == 36
+    fn validate_oauth_token(input: &str) -> Validation {
+        if !input.starts_with("oauth:") {
+            return Validation::MustStartWithOAuth;
+        }
+
+        match input.len() {
+            36 => Validation::Valid,
+            n => Validation::MustBeLength(Self::OAUTH_TOKEN_LABEL, 36, n),
+        }
     }
 
-    const fn validate_client_id(input: &str) -> bool {
-        input.len() == 30
+    const fn validate_client_id(input: &str) -> Validation {
+        match input.len() {
+            30 => Validation::Valid,
+            n => Validation::MustBeLength(Self::CLIENT_ID_LABEL, 30, n),
+        }
     }
 
-    const fn validate_client_secret(input: &str) -> bool {
-        Self::validate_client_id(input)
+    const fn validate_client_secret(input: &str) -> Validation {
+        match input.len() {
+            30 => Validation::Valid,
+            n => Validation::MustBeLength(Self::CLIENT_SECRET_LABEL, 30, n),
+        }
     }
 
-    const LABELS: [(
-        &'static str,
-        fn(&mut egui::Ui),
-        fn(&str) -> bool,
-        &'static str,
-    ); 4] = [
+    const NAME_LABEL: &'static str = "Name";
+    const OAUTH_TOKEN_LABEL: &'static str = "OAuth Token";
+    const CLIENT_ID_LABEL: &'static str = "Client-Id";
+    const CLIENT_SECRET_LABEL: &'static str = "Client-Secret";
+
+    const LABELS: [(&'static str, fn(&str) -> Validation, fn(&mut egui::Ui)); 4] = [
+        (Self::NAME_LABEL, Self::validate_name, Self::label_for_name),
         (
-            "Name", //
-            Self::label_for_name as _,
-            Self::validate_name,
-            "The name cannot contain spaces",
-        ),
-        (
-            "OAuth Token",
-            Self::label_for_oauth_token as _,
+            Self::OAUTH_TOKEN_LABEL,
             Self::validate_oauth_token,
-            "The token must start with oauth: and be 36 characters in length",
+            Self::label_for_oauth_token,
         ),
         (
-            "Client-Id",
-            Self::label_for_client_id as _,
+            Self::CLIENT_ID_LABEL,
             Self::validate_client_id,
-            "The client-id must be 30 characters in length",
+            Self::label_for_client_id,
         ),
         (
-            "Client-Secret",
-            Self::label_for_client_secret as _,
+            Self::CLIENT_SECRET_LABEL,
             Self::validate_client_secret,
-            "The client-secret must be 30 characters in length",
+            Self::label_for_client_secret,
         ),
     ];
 }
 
-impl<'a, 'b> egui::Widget for TwitchSettings<'a, 'b> {
-    fn ui(self, ui: &mut egui::Ui) -> egui::Response {
-        Grid::new("twitch_settings")
-            .num_columns(2)
-            .striped(true)
-            .show(ui, |ui| {
-                for ((label, label_maker, validator, requirements), (value, password)) in
-                    Self::LABELS.into_iter().zip([
-                        (&mut self.config.twitch_name, false),
-                        (&mut self.config.twitch_oauth_token, true),
-                        (&mut self.config.twitch_client_id, false),
-                        (&mut self.config.twitch_client_secret, true),
-                    ])
-                {
-                    if !validator(&value) {
-                        ui.horizontal(|ui| {
-                            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                ui.monospace(crate::font_icon::HELP)
-                                    .on_hover_ui_at_pointer(label_maker);
-
-                                ui.add(Label::new(
-                                    RichText::new(label)
-                                        .monospace()
-                                        .color(ui.visuals().error_fg_color),
-                                ))
-                                .on_hover_text_at_pointer({
-                                    let requirements = value
-                                        .is_empty()
-                                        .then_some(requirements)
-                                        .unwrap_or("The input cannot be empty");
-
-                                    RichText::new(requirements).color(ui.visuals().warn_fg_color)
-                                });
-                            })
-                        });
-                    } else {
-                        ui.horizontal(|ui| {
-                            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                ui.monospace(crate::font_icon::HELP)
-                                    .on_hover_ui_at_pointer(label_maker);
-
-                                ui.monospace(label);
-                            });
-                        });
-                    }
-
-                    TwitchSettingsView {
-                        settings_state: self.settings_state,
-                        key: SettingsState::make_hash(label),
-                        password,
-                        view: ui,
-                    }
-                    .show_entry(value);
-
-                    ui.end_row()
-                }
-            })
-            .response
-    }
+#[derive(Copy, Clone)]
+enum Validation {
+    CannotBeEmpty,
+    CannotContainSpaces,
+    MustStartWithOAuth,
+    MustBeLength(&'static str, usize, usize),
+    Valid,
 }
 
-struct TwitchSettingsView<'a, 'u> {
-    settings_state: &'a mut SettingsState,
-    key: u64,
-    password: bool,
-    view: &'u mut egui::Ui,
-}
-
-impl<'a, 'u> TwitchSettingsView<'a, 'u> {
-    fn show_entry(&mut self, val: &'a mut String) {
-        let is_pass = self
-            .settings_state
-            .twitch_visible
-            .get(&self.key)
-            .copied()
-            .unwrap_or(self.password);
-
-        let resp = self.view.add(TextEdit::singleline(val).password(is_pass));
-
-        if self.password {
-            let down = self
-                .view
-                .small_button(crate::font_icon::HIDDEN)
-                .is_pointer_button_down_on();
-
-            *self
-                .settings_state
-                .twitch_visible
-                .entry(self.key)
-                .or_insert(true) = !down;
+impl Validation {
+    fn display(&self) -> Option<Cow<'static, str>> {
+        let s = match self {
+            Self::CannotBeEmpty => "The input cannot be empty".into(),
+            Self::CannotContainSpaces => "Spaces are not allowed".into(),
+            Self::MustStartWithOAuth => "Token must start with `oauth:`".into(),
+            Self::MustBeLength(prefix, length, actual) => {
+                format!("{prefix} must be {length} in length. (currently {actual})").into()
+            }
+            _ => return None,
         };
-
-        if resp.lost_focus() && self.view.ctx().input().key_pressed(Key::Enter) {}
+        Some(s)
     }
 }

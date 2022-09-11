@@ -25,10 +25,11 @@ impl Default for KeyMapping {
         }
 
         #[rustfmt::skip]
-        const DEFAULT: [(Chord, KeyAction); 27] = [
-            (key!(F1), ToggleHelp),
+        const DEFAULT: [(Chord, KeyAction); 28] = [
+            (key!(F1), SwitchToMain),
+            (key!(F2), SwitchToSettings),
             (key!(ctrl L), ToggleLineMode),
-            (key!(F2), ToggleTabBar),
+            (key!(F4), ToggleTabBar),
             (key!(ctrl T), ToggleTimestamps),
             (key!(ctrl U), ToggleUserList),
             // number row starts at 1
@@ -76,6 +77,12 @@ impl KeyMapping {
                 self.map.push((*chord, *action));
             }
         }
+    }
+
+    pub fn find_chords_reverse<'t>(&'t mut self, action: &KeyAction) -> Option<&'t mut Vec<Chord>> {
+        self.reverse_mapping()
+            .iter_mut()
+            .find_map(|(act, chords)| (act == action).then_some(chords))
     }
 
     pub fn iter(
@@ -185,11 +192,11 @@ impl ::serde::Serialize for KeyMapping {
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd, Eq, Ord, Hash)]
 pub struct Chord {
-    ctrl: bool,
-    alt: bool,
-    shift: bool,
-    cmd: bool,
-    key: egui::Key,
+    pub ctrl: bool,
+    pub alt: bool,
+    pub shift: bool,
+    pub cmd: bool,
+    pub key: egui::Key,
 }
 
 impl From<(Modifiers, egui::Key)> for Chord {
@@ -339,8 +346,11 @@ impl Chord {
             }
             buf.push_str(repr)
         }
-        if !buf.is_empty() {
-            buf.push('+')
+
+        if *modifiers != egui::Modifiers::NONE {
+            if !buf.is_empty() {
+                buf.push('+')
+            }
         }
     }
 
@@ -356,7 +366,6 @@ impl Chord {
                 command: false,
             },
         );
-
         buf.push_str(KeyHelper::stringify_key(&self.key));
         buf
     }
@@ -429,7 +438,8 @@ macro_rules! define_key {
 }
 
 define_key! {
-    ToggleHelp => "Toggles the help window"
+    SwitchToMain => "Switch the main view"
+    SwitchToSettings => "Toggles the settings view"
     ToggleLineMode => "Cycles through the line modes for the current tab"
     ToggleTabBar => "Toggles the tab bar"
     ToggleTimestamps => "Toggles whether timestamps are visible for the current tab"

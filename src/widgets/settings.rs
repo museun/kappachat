@@ -1,73 +1,78 @@
-use egui::{Align, ComboBox, Grid, Layout};
+use egui::ScrollArea;
 
-use crate::{state::SettingsState, tabs::Tabs};
+use crate::state::State;
 
-pub struct Settings<'a> {
-    settings_state: &'a mut SettingsState,
-    showing_tab_bar: &'a mut bool,
-    tabs: &'a mut Tabs,
+#[derive(Default, PartialEq, PartialOrd)]
+pub enum ActiveSettingsView {
+    #[default]
+    Channels,
+    KeyBindings,
+    Twitch,
+    Display,
+    None,
 }
 
-impl<'a> Settings<'a> {
-    pub fn new(
-        settings_state: &'a mut SettingsState,
-        showing_tab_bar: &'a mut bool,
-        tabs: &'a mut Tabs,
-    ) -> Self {
-        Self {
-            settings_state,
-            showing_tab_bar,
-            tabs,
-        }
+#[derive(Default)]
+pub struct SettingsState {
+    active: ActiveSettingsView,
+}
+
+pub struct SettingsView<'a> {
+    state: &'a mut State,
+}
+
+impl<'a> SettingsView<'a> {
+    pub fn new(state: &'a mut State) -> Self {
+        Self { state }
     }
-}
 
-impl<'a> egui::Widget for Settings<'a> {
-    fn ui(self, ui: &mut egui::Ui) -> egui::Response {
-        ui.vertical(|ui| {
-            ui.group(|ui| {
-                ui.vertical(|ui| {
-                    ui.label("display");
-                    ui.separator();
+    pub fn display(self, ui: &mut egui::Ui) -> bool {
+        use ActiveSettingsView::*;
 
-                    Grid::new("display_settings_grid")
-                        .num_columns(2)
-                        .striped(true)
-                        .show(ui, |ui| {
-                            ui.monospace("pixels per point");
-                            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                ComboBox::from_id_source("pixels_per_point")
-                                    .selected_text(SettingsState::dpi_repr(
-                                        self.settings_state.pixels_per_point,
-                                    ))
-                                    .show_ui(ui, |ui| {
-                                        for n in SettingsState::dpi_range() {
-                                            ui.selectable_value(
-                                                &mut self.settings_state.pixels_per_point,
-                                                n,
-                                                SettingsState::dpi_repr(n),
-                                            );
-                                        }
-                                    });
-                            });
+        let resp = ui.horizontal(|ui| {
+            ui.selectable_value(&mut self.state.settings.active, Channels, "Channels");
+            ui.selectable_value(&mut self.state.settings.active, KeyBindings, "Key Bindings");
+            ui.selectable_value(&mut self.state.settings.active, Twitch, "Twitch");
+            ui.selectable_value(&mut self.state.settings.active, Display, "Display");
 
-                            ui.end_row();
-
-                            let ppp = self.settings_state.pixels_per_point;
-                            if ui.ctx().pixels_per_point() != ppp {
-                                ui.ctx().set_pixels_per_point(ppp);
-                            }
-
-                            ui.monospace("show tab bar");
-                            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                ui.checkbox(self.showing_tab_bar, "");
-                            });
-                            ui.end_row();
-                        })
-                });
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.button("close").clicked()
             })
-            .response
-        })
-        .response
+            .inner
+        });
+
+        ui.separator();
+
+        ScrollArea::horizontal()
+            .auto_shrink([false, false])
+            .max_width(ui.available_width())
+            .show(ui, |ui| match self.state.settings.active {
+                Channels => self.display_channels(ui),
+                KeyBindings => self.display_keybindings(ui),
+                Twitch => self.display_twitch(ui),
+                Display => self.display_display(ui),
+                _ => {}
+            });
+
+        resp.inner
+    }
+
+    fn display_channels(self, ui: &mut egui::Ui) {
+        super::ChannelSettings::new(&mut self.state.twitch_channels, &mut self.state.channels)
+            .display(ui);
+    }
+
+    fn display_keybindings(self, ui: &mut egui::Ui) {
+        super::KeybindSettings::new(&mut self.state.keybind_state, &mut self.state.key_mapping)
+            .display(ui)
+    }
+
+    fn display_twitch(self, ui: &mut egui::Ui) {
+        super::TwitchSettings::new(&mut self.state.config, &mut self.state.twitch_settings)
+            .display(ui)
+    }
+
+    fn display_display(self, ui: &mut egui::Ui) {
+        super::DisplaySettings::new(self.state).display(ui)
     }
 }

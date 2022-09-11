@@ -28,7 +28,7 @@ impl<'a> egui::Widget for EditBox<'a> {
             self.line.replace(input);
         }
 
-        ui.ctx().memory().request_focus(id);
+        resp.request_focus();
         resp
     }
 }

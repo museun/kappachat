@@ -30,7 +30,7 @@ pub const KAPPA_WEALTH_PNG: &[u8] = //
         "/kappas/kappa_wealth.png"
     ));
 
-pub fn load_kappas() -> [RetainedImage; 5] {
+pub fn load_kappas() -> Vec<RetainedImage> {
     [
         (KAPPA_PNG, "kappa.png"),
         (KAPPA_CLAUS_PNG, "kappa_claus.png"),
@@ -38,5 +38,7 @@ pub fn load_kappas() -> [RetainedImage; 5] {
         (KAPPA_ROSS_PNG, "kappa_ross.png"),
         (KAPPA_WEALTH_PNG, "kappa_wealth.png"),
     ]
+    .into_iter()
     .map(|(data, name)| RetainedImage::from_image_bytes(name, data).unwrap())
+    .collect()
 }
