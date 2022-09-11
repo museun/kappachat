@@ -23,9 +23,6 @@ pub mod widgets;
 
 mod action;
 
-mod command;
-pub use command::Command;
-
 mod config;
 pub use config::EnvConfig;
 
