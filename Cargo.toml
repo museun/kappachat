@@ -8,7 +8,7 @@ description = "chat with kappas near you"
 default-run = "kappachat"
 
 [dependencies]
-anyhow = "1.0.64"
+anyhow           = "1.0.64"
 eframe           = { version = "0.19.0", features = ["dark-light", "persistence"] }
 egui             = "0.19.0"
 egui_extras      = { version = "0.19.0", features = ["image"] }
@@ -25,3 +25,25 @@ simple_env_load  = "0.2.0"
 time             = { version = "0.3.14", features = ["parsing", "formatting", "macros", "local-offset", "serde", "serde-well-known"] }
 ureq             = { version = "2.5.0", features = ["json"] }
 uuid             = { version = "1.1.2", features = ["v4", "serde"] }
+
+
+[profile.dev.package.eframe]
+opt-level = 3
+
+[profile.dev.package.epaint]
+opt-level = 3
+
+[profile.dev.package.egui]
+opt-level = 3
+
+[profile.dev.package.egui_extras]
+opt-level = 3
+
+[profile.dev.package.egui-winit]
+opt-level = 3
+
+[profile.dev.package.egui_glow]
+opt-level = 3
+
+[profile.dev.package.image]
+opt-level = 3
