@@ -1,11 +1,12 @@
 use eframe::{NativeOptions, Storage};
-use egui::{text::LayoutJob, CentralPanel, Color32, Event, Key, TextFormat, TextStyle};
+use egui::{CentralPanel, Event, Key};
 
 use kappachat::{
-    helix, kappas, tabs, twitch,
+    helix, kappas,
+    state::{AppState, BorrowedPersistState, PersistState},
+    tabs, twitch,
     widgets::{self, MainWidget},
-    AppState, BorrowedPersistState, CachedImages, Command, EnvConfig, Interaction, KeyAction, Line,
-    PersistState, TwitchLine,
+    CachedImages, EnvConfig, Interaction, KeyAction, TwitchLine,
 };
 
 pub struct App {
@@ -31,33 +32,7 @@ impl App {
         }
     }
 
-    const fn verify_config(&self) -> bool {
-        let EnvConfig {
-            twitch_name: _twitch_name,
-            twitch_oauth_token: _twitch_oauth_token,
-            twitch_client_id: _twitch_client_id,
-            twitch_client_secret: _twitch_client_secret,
-        } = &self.app.state.config;
-
-        // if twitch_name.is_some()
-        //     & twitch_oauth_token.is_some()
-        //     & twitch_client_id.is_some()
-        //     & twitch_client_secret.is_some()
-        // {
-        //     return true;
-        // }
-
-        // TODO use the validators from the settings?
-
-        false
-    }
-
     fn connect(&mut self) -> anyhow::Result<()> {
-        if !self.verify_config() {
-            self.switch_to_settings();
-            return Ok(());
-        }
-
         if self.app.twitch.is_some() {
             todo!("already connected")
         }
@@ -183,89 +158,6 @@ impl App {
         self.app.twitch.is_some()
     }
 
-    fn report_error(&mut self, error: Line) {
-        self.app.tabs.get_mut("*status").append(error);
-    }
-
-    fn create_error(&mut self, prefix: impl ToString, msg: impl AsRef<str>) {
-        let id = TextStyle::Body.resolve(&*self.context.style());
-        let mut layout = LayoutJob::simple_singleline(prefix.to_string(), id.clone(), Color32::RED);
-        layout.append(msg.as_ref(), 5.0, TextFormat::simple(id, Color32::GRAY));
-
-        let msg = layout;
-        self.report_error(Line::Status { msg })
-    }
-
-    fn check_if_connected(&mut self, cmd: &Command<'_>) -> bool {
-        if self.is_connected() || matches!(cmd, Command::Connect) {
-            return true;
-        }
-
-        self.create_error("not connected:", &cmd.report());
-        false
-    }
-
-    fn send_line(&mut self, line: &str) {
-        let line = line.trim();
-        if line.is_empty() {
-            return;
-        }
-
-        // TODO get rid of all of this
-        let cmd = Command::parse(line);
-        if !self.check_if_connected(&cmd) {
-            return;
-        }
-
-        match cmd {
-            Command::Message { raw } => {
-                let target = &self.app.tabs.active().title;
-                self.send_message(target, raw);
-
-                let twitch::Identity {
-                    user_name, color, ..
-                } = self.identity();
-
-                let line = TwitchLine::new(
-                    user_name, //
-                    target,
-                    raw,
-                    vec![],
-                )
-                .with_color(color);
-
-                self.app
-                    .tabs
-                    .active_mut()
-                    .append(tabs::Line::Twitch { line });
-            }
-
-            Command::Join { channel } => {
-                for channel in channel.split(',') {
-                    self.join_channel(channel);
-                }
-            }
-
-            Command::Part { channel } => {
-                let target = channel.unwrap_or_else(|| &self.app.tabs.active().title);
-                self.part_channel(target);
-            }
-
-            Command::Connect => {
-                if let Err(err) = self.connect() {
-                    // TODO Line::Broadcast
-                    self.create_error("disconnected", err.to_string());
-                }
-            }
-
-            Command::Invalid { raw } => {
-                self.create_error("invalid command:", raw);
-            }
-
-            Command::Nothing => {}
-        }
-    }
-
     fn toggle_tab_bar(&mut self) {
         self.app.showing_tab_bar = !self.app.showing_tab_bar;
     }
@@ -338,8 +230,6 @@ impl App {
             _ => None,
         }) {
             if let Some(action) = self.app.state.key_mapping.find(key, modifiers) {
-                eprintln!("action: {action:?}");
-
                 use KeyAction::*;
                 match action {
                     SwitchToSettings => self.switch_to_settings(),
@@ -369,64 +259,14 @@ impl App {
     }
 }
 
-impl App {
-    fn try_display_tab_bar(&mut self) {
-        if self.app.showing_tab_bar {
-            egui::panel::TopBottomPanel::top("top")
-                .resizable(false)
-                .show(&self.context, |ui| ui.add(&mut self.app.tabs));
-        }
-    }
-
-    fn try_send_line(&mut self) {
-        if let Some(line) = &mut self.app.line {
-            if !line.is_empty() {
-                let line = std::mem::take(line);
-                self.send_line(&line);
-            }
-        }
-    }
-}
-
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
         self.try_read();
-
         self.try_handle_key_press();
 
         CentralPanel::default().show(ctx, |ui| {
             MainWidget::new(&mut self.app.state).display(ui);
         });
-
-        // self.try_display_help();
-
-        // if !self.try_display_start_screen() {
-        //     return;
-        // }
-
-        // egui::panel::TopBottomPanel::bottom("bottom")
-        //     .resizable(false)
-        //     .frame(egui::Frame::none().fill(Color32::BLACK))
-        //     .show(ctx, |ui| {
-        //         widgets::EditBox::new(&mut self.state.tabs, &mut self.state.line).ui(ui)
-        //     });
-
-        // self.try_send_line();
-
-        // self.try_display_tab_bar();
-
-        // // TODO redo this
-        // let pos = self.state.scroll;
-        // self.state.scroll += ctx.input().scroll_delta.y;
-
-        // egui::panel::CentralPanel::default().show(ctx, |ui| {
-        //     widgets::TabWidget {
-        //         tab: self.state.tabs.active_mut(),
-        //         cached_images: &mut self.cached_images,
-        //         stick: pos != self.state.scroll,
-        //     }
-        //     .ui(ui)
-        // });
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {

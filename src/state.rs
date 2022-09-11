@@ -1,11 +1,12 @@
 use std::hash::{Hash, Hasher};
 
 use crate::{
+    twitch,
     widgets::{
         KeybindingsState, MainView, SettingsState, StartState, TwitchChannelsState,
         TwitchSettingsState,
     },
-    Channel, EnvConfig, KeyMapping,
+    Channel, EnvConfig, KeyMapping, Tabs,
 };
 
 #[derive(Default)]
@@ -30,4 +31,58 @@ impl State {
         input.hash(&mut state);
         state.finish()
     }
+}
+
+pub struct AppState {
+    pub twitch: Option<twitch::Twitch>,
+    pub identity: Option<twitch::Identity>,
+    pub state: State,
+
+    pub line: Option<String>,
+
+    pub scroll: f32,
+
+    pub tabs: Tabs,
+    pub showing_tab_bar: bool,
+}
+
+impl AppState {
+    // TODO redo this
+    pub fn new(kappas: Vec<egui_extras::RetainedImage>, persist: PersistState) -> Self {
+        Self {
+            twitch: None,
+            identity: None,
+            state: State {
+                pixels_per_point: persist.pixels_per_point,
+                channels: persist.channels,
+                config: persist.env_config,
+                key_mapping: persist.key_mapping,
+                start_state: StartState {
+                    kappas,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            line: None,
+            scroll: 0.0,
+            tabs: Tabs::create(),
+            showing_tab_bar: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+pub struct PersistState {
+    pub env_config: EnvConfig,
+    pub key_mapping: KeyMapping,
+    pub channels: Vec<Channel>,
+    pub pixels_per_point: f32,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct BorrowedPersistState<'a> {
+    pub env_config: &'a EnvConfig,
+    pub key_mapping: &'a KeyMapping,
+    pub channels: &'a Vec<Channel>,
+    pub pixels_per_point: &'a f32,
 }

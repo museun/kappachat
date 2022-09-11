@@ -17,7 +17,7 @@ impl RequestPaint for egui::Context {
 pub struct NoopRepaint;
 impl RequestPaint for NoopRepaint {}
 
-mod state;
+pub mod state;
 
 pub mod widgets;
 
@@ -36,7 +36,6 @@ pub mod helix;
 pub use helix::CachedImages;
 
 pub mod tabs;
-use state::State;
 pub use tabs::{Line, Tabs};
 
 mod line;
@@ -55,97 +54,10 @@ pub use ext::JobExt as _;
 
 mod interaction;
 pub use interaction::Interaction;
-use widgets::StartState;
 
 pub mod kappas;
 
-pub mod font_icon {
-    pub const HIDDEN: &str = "👁";
-    pub const ADD: &str = "➕";
-    pub const REMOVE: &str = "✖";
-    pub const UNDO: &str = "🔄";
-    pub const HELP: &str = "❔";
-    pub const TIME: &str = "⏰";
-    pub const AUTOJOIN: &str = "🔜";
-    pub const USER_LIST: &str = "🚮";
-}
+pub mod font_icon;
 
-#[derive(Debug, Clone, Default, serde::Deserialize)]
-pub struct PersistState {
-    pub env_config: EnvConfig,
-    pub key_mapping: KeyMapping,
-    pub channels: Vec<Channel>,
-    pub pixels_per_point: f32,
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct BorrowedPersistState<'a> {
-    pub env_config: &'a EnvConfig,
-    pub key_mapping: &'a KeyMapping,
-    pub channels: &'a Vec<Channel>,
-    pub pixels_per_point: &'a f32,
-}
-
-#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
-pub struct Channel {
-    pub name: String,
-    pub show_timestamps: bool,
-    pub show_user_list: bool,
-    pub auto_join: bool,
-}
-
-impl Channel {
-    pub fn new(name: impl ToString) -> Self {
-        Self {
-            name: name.to_string(),
-            show_timestamps: true,
-            show_user_list: true,
-            auto_join: true,
-        }
-    }
-
-    pub fn temporary(self) -> Self {
-        Self {
-            auto_join: false,
-            ..self
-        }
-    }
-}
-
-pub struct AppState {
-    pub twitch: Option<twitch::Twitch>,
-    pub identity: Option<twitch::Identity>,
-    pub state: State,
-
-    pub line: Option<String>,
-
-    pub scroll: f32,
-
-    pub tabs: Tabs,
-    pub showing_tab_bar: bool,
-}
-
-impl AppState {
-    // TODO redo this
-    pub fn new(kappas: Vec<egui_extras::RetainedImage>, persist: PersistState) -> Self {
-        Self {
-            twitch: None,
-            identity: None,
-            state: State {
-                pixels_per_point: persist.pixels_per_point,
-                channels: persist.channels,
-                config: persist.env_config,
-                key_mapping: persist.key_mapping,
-                start_state: StartState {
-                    kappas,
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-            line: None,
-            scroll: 0.0,
-            tabs: Tabs::create(),
-            showing_tab_bar: false,
-        }
-    }
-}
+mod channel;
+pub use channel::Channel;
