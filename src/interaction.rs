@@ -8,6 +8,12 @@ pub struct Interaction {
     receiver_rx: Receiver<crate::twitch::Message>,
 }
 
+impl Default for Interaction {
+    fn default() -> Self {
+        Self::create()
+    }
+}
+
 impl Interaction {
     pub fn create() -> Self {
         let (sender_tx, sender_rx) = flume::bounded(16);

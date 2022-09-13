@@ -5,6 +5,12 @@ pub struct Queue<T> {
     queue: VecDeque<T>,
 }
 
+impl<T> Default for Queue<T> {
+    fn default() -> Self {
+        Self::with_capacity(1000)
+    }
+}
+
 impl<T> Queue<T> {
     pub fn with_capacity(max: usize) -> Self {
         assert!(max != 0);

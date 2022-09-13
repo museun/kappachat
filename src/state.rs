@@ -3,10 +3,10 @@ use std::hash::{Hash, Hasher};
 use crate::{
     twitch,
     widgets::{
-        KeybindingsState, MainViewState, SettingsState, StartState, TwitchChannelsState,
-        TwitchSettingsState,
+        settings::KeybindingsState, settings::TwitchChannelsState, settings::TwitchSettingsState,
+        MainViewState, MainViewView, SettingsState, StartState,
     },
-    Channel, EnvConfig, KeyMapping, Tabs,
+    Channel, EnvConfig, Interaction, KeyMapping, Queue, RequestPaint,
 };
 
 #[derive(Default)]
@@ -19,9 +19,12 @@ pub struct State {
     pub twitch_channels: TwitchChannelsState,
     pub twitch_settings: TwitchSettingsState,
     pub keybind_state: KeybindingsState,
-    pub current_view: MainViewState,
-    pub previous_view: MainViewState,
+    pub current_view: MainViewView,
+    pub previous_view: MainViewView,
     pub start_state: StartState,
+
+    pub main_view: MainViewState,
+    pub messages: Queue<twitch::Message>,
 }
 
 impl State {
@@ -33,26 +36,65 @@ impl State {
     }
 }
 
+#[derive(Default)]
 pub struct AppState {
     pub twitch: Option<twitch::Twitch>,
     pub identity: Option<twitch::Identity>,
+    pub interaction: Interaction,
     pub state: State,
-
-    pub line: Option<String>,
-
-    pub scroll: f32,
-
-    pub tabs: Tabs,
-    pub showing_tab_bar: bool,
 }
 
 impl AppState {
-    // TODO redo this
-    // XXX almost done redoing it
+    pub fn identity(&self) -> &twitch::Identity {
+        self.identity.as_ref().expect("initialization")
+    }
+
+    pub fn is_our_name(&self, name: &str) -> bool {
+        self.identity().user_name == name
+    }
+
+    pub fn send_message(&self, target: &str, data: &str) {
+        self.send_raw_fmt(format_args!("PRIVMSG {target} :{data}\r\n"))
+    }
+
+    pub fn join_channel(&self, channel: &str) {
+        let octo = if !channel.starts_with('#') { "#" } else { "" };
+        self.send_raw_fmt(format_args!("JOIN {octo}{channel}\r\n"))
+    }
+
+    pub fn part_channel(&self, channel: &str) {
+        self.send_raw_fmt(format_args!("PART {channel}\r\n"))
+    }
+
+    fn send_raw_fmt(&self, raw: std::fmt::Arguments<'_>) {
+        self.interaction.send_raw(raw);
+    }
+
+    pub fn connect(&mut self, painter: impl RequestPaint + 'static) -> anyhow::Result<()> {
+        if self.twitch.is_some() {
+            todo!("already connected")
+        }
+
+        let (client, identity) = {
+            let reg = twitch::Registration {
+                address: "irc.chat.twitch.tv:6667",
+                nick: &self.state.config.twitch_name,
+                pass: &self.state.config.twitch_oauth_token,
+            };
+
+            twitch::Client::connect(reg)
+        }?;
+
+        self.identity.replace(identity);
+        self.twitch.replace(client.spawn_listen(painter));
+
+        Ok(())
+    }
+}
+
+impl AppState {
     pub fn new(kappas: Vec<egui_extras::RetainedImage>, persist: PersistState) -> Self {
         Self {
-            twitch: None,
-            identity: None,
             state: State {
                 pixels_per_point: persist.pixels_per_point,
                 channels: persist.channels,
@@ -64,10 +106,7 @@ impl AppState {
                 },
                 ..Default::default()
             },
-            line: None,
-            scroll: 0.0,
-            tabs: Tabs::create(),
-            showing_tab_bar: false,
+            ..Default::default()
         }
     }
 }

@@ -56,3 +56,11 @@ pub mod font_icon;
 
 mod channel;
 pub use channel::Channel;
+
+pub mod app;
+pub use app::App;
+
+pub const SETTINGS_KEY: &str = "kappa_chat_settings";
+
+// let width = ui.fonts().glyph_width(&TextStyle::Body.resolve(ui.style()), ' ');
+// ui.spacing_mut().item_spacing.x = width;

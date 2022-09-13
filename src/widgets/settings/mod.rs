@@ -2,6 +2,18 @@ use egui::ScrollArea;
 
 use crate::state::State;
 
+mod keybind;
+pub use keybind::{KeybindSettings, KeybindingsState};
+
+mod display;
+pub use display::DisplaySettings;
+
+mod channel;
+pub use channel::{ChannelSettings, TwitchChannelsState};
+
+mod twitch;
+pub use twitch::{TwitchSettings, TwitchSettingsState};
+
 #[derive(Default, PartialEq, PartialOrd, Eq, Ord)]
 pub enum ActiveSettingsView {
     #[default]
@@ -62,21 +74,18 @@ impl<'a> SettingsView<'a> {
     }
 
     fn display_channels(self, ui: &mut egui::Ui) {
-        super::ChannelSettings::new(&mut self.state.twitch_channels, &mut self.state.channels)
-            .display(ui);
+        ChannelSettings::new(&mut self.state.twitch_channels, &mut self.state.channels).display(ui);
     }
 
     fn display_keybindings(self, ui: &mut egui::Ui) {
-        super::KeybindSettings::new(&mut self.state.keybind_state, &mut self.state.key_mapping)
-            .display(ui)
+        KeybindSettings::new(&mut self.state.keybind_state, &mut self.state.key_mapping).display(ui)
     }
 
     fn display_twitch(self, ui: &mut egui::Ui) {
-        super::TwitchSettings::new(&mut self.state.config, &mut self.state.twitch_settings)
-            .display(ui)
+        TwitchSettings::new(&mut self.state.config, &mut self.state.twitch_settings).display(ui)
     }
 
     fn display_display(self, ui: &mut egui::Ui) {
-        super::DisplaySettings::new(self.state).display(ui)
+        DisplaySettings::new(self.state).display(ui)
     }
 }

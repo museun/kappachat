@@ -29,6 +29,8 @@ impl<'a> DisplaySettings<'a> {
                 });
         });
 
+        egui::widgets::global_dark_light_mode_buttons(ui);
+
         let ppp = self.state.pixels_per_point;
         if ui.ctx().pixels_per_point() != ppp {
             ui.ctx().set_pixels_per_point(ppp);
