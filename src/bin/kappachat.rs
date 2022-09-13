@@ -27,10 +27,12 @@ fn load_settings(state: &mut PersistState, storage: &dyn Storage) {
     state.channels = deser.channels;
     state.key_mapping = deser.key_mapping;
 
+    type Extract = for<'e> fn(&'e mut EnvConfig) -> &'e mut String;
+
     fn maybe_update<'a: 'e, 'b: 'e, 'e>(
         left: &'a mut EnvConfig,
         right: &'b mut EnvConfig,
-        extract: fn(&'e mut EnvConfig) -> &'e mut String,
+        extract: Extract,
     ) {
         let left = extract(left);
         let right = extract(right);
@@ -40,10 +42,10 @@ fn load_settings(state: &mut PersistState, storage: &dyn Storage) {
     }
 
     for extract in [
-        (move |e| &mut e.twitch_oauth_token) as fn(&mut EnvConfig) -> &mut String,
-        (move |e| &mut e.twitch_name) as fn(&mut EnvConfig) -> &mut String,
-        (move |e| &mut e.twitch_client_id) as fn(&mut EnvConfig) -> &mut String,
-        (move |e| &mut e.twitch_client_secret) as fn(&mut EnvConfig) -> &mut String,
+        (move |e| &mut e.twitch_oauth_token) as Extract,
+        (move |e| &mut e.twitch_name) as Extract,
+        (move |e| &mut e.twitch_client_id) as Extract,
+        (move |e| &mut e.twitch_client_secret) as Extract,
     ] {
         maybe_update(&mut state.env_config, &mut deser.env_config, extract);
     }

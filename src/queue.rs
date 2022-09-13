@@ -7,11 +7,13 @@ pub struct Queue<T> {
 
 impl<T> Default for Queue<T> {
     fn default() -> Self {
-        Self::with_capacity(1000)
+        Self::with_capacity(Self::DEFAULT_MAX)
     }
 }
 
 impl<T> Queue<T> {
+    const DEFAULT_MAX: usize = 100;
+
     pub fn with_capacity(max: usize) -> Self {
         assert!(max != 0);
         Self {
