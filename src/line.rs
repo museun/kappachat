@@ -1,7 +1,7 @@
 use egui::Color32;
 use time::{format_description::FormatItem, macros::format_description, OffsetDateTime};
 
-use crate::twitch::TextKind;
+use crate::twitch::EmoteSpan;
 
 #[derive(Clone)]
 pub struct Timestamp {
@@ -37,7 +37,7 @@ pub struct TwitchLine {
     pub sender: String,
     pub data: String,
     pub color: Color32,
-    pub spans: Vec<TextKind<'static>>,
+    pub spans: Vec<EmoteSpan>,
 }
 
 impl TwitchLine {
@@ -45,7 +45,7 @@ impl TwitchLine {
         sender: impl ToString,
         source: impl ToString,
         data: impl ToString,
-        spans: Vec<TextKind<'static>>,
+        spans: Vec<EmoteSpan>,
     ) -> Self {
         Self {
             timestamp: Timestamp::now_local(),

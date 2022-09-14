@@ -1,8 +1,13 @@
 use std::time::{Duration, Instant};
 
-use egui::{vec2, Direction, Layout, Pos2, Rect, Sense, Vec2};
+use eframe::egui::Button;
+use egui::{
+    style::Margin, vec2, Align2, Area, Direction, Frame, Layout, Pos2, Rect, RichText, Sense, Vec2,
+};
 
-use crate::RequestPaint;
+use crate::{state::ViewState, Chord, KeyAction, KeyMapping, RequestPaint};
+
+use super::MainViewView;
 
 pub struct StartRotation {
     rotation: f32,
@@ -74,11 +79,21 @@ impl Default for StartState {
 
 pub struct StartView<'a> {
     state: &'a mut StartState,
+    key_mapping: &'a mut KeyMapping,
+    view: &'a mut ViewState,
 }
 
 impl<'a> StartView<'a> {
-    pub fn new(state: &'a mut StartState) -> Self {
-        Self { state }
+    pub fn new(
+        state: &'a mut StartState,
+        key_mapping: &'a mut KeyMapping,
+        view: &'a mut ViewState,
+    ) -> Self {
+        Self {
+            state,
+            key_mapping,
+            view,
+        }
     }
 
     const DELAY: Duration = Duration::from_secs(5);
@@ -93,10 +108,10 @@ impl<'a> StartView<'a> {
 
 impl<'a> StartView<'a> {
     pub fn display(mut self, ui: &mut egui::Ui) -> bool {
+        Inlay::new(&mut self.key_mapping, &mut self.view).display(ui);
+
         self.pick_random();
-
         ui.ctx().request_repaint_after(Self::DELAY);
-
         let ppp = ui.ctx().pixels_per_point();
 
         let img_id = self.state.kappas[self.state.kappa_index].texture_id(ui.ctx());
@@ -105,13 +120,7 @@ impl<'a> StartView<'a> {
         let rot = (self.state.start_rotation.speed * ppp).to_radians();
 
         if self.state.start_rotation.spinning {
-            ui.small(format!("Kappas per second: {:.3?}", {
-                let dt = ui.input().time - self.state.time;
-                if dt.trunc() % 1.0 != 1.0 {
-                    self.state.rot = self.state.start_rotation.rotation.to_radians() * 6.0;
-                }
-                self.state.rot
-            }));
+            self.kappas_rotation(ui);
         }
 
         ui.with_layout(Layout::centered_and_justified(Direction::TopDown), |ui| {
@@ -156,5 +165,85 @@ impl<'a> StartView<'a> {
             resp.clicked()
         })
         .inner
+    }
+
+    fn kappas_rotation(&mut self, ui: &mut egui::Ui) {
+        Area::new("kps")
+            .anchor(Align2::LEFT_TOP, vec2(20.0, 20.0))
+            .movable(false)
+            .show(ui.ctx(), |ui| {
+                ui.small(format!("Kappas per second: {:.3?}", {
+                    let dt = ui.input().time - self.state.time;
+                    if dt.trunc() % 1.0 != 1.0 {
+                        self.state.rot = self.state.start_rotation.rotation.to_radians() * 6.0;
+                    }
+                    self.state.rot
+                }));
+            });
+    }
+}
+
+struct Inlay<'a> {
+    key_mapping: &'a mut KeyMapping,
+    view: &'a mut ViewState,
+}
+
+impl<'a> Inlay<'a> {
+    fn new(key_mapping: &'a mut KeyMapping, view: &'a mut ViewState) -> Self {
+        Self { key_mapping, view }
+    }
+
+    fn display(&mut self, ui: &mut egui::Ui) {
+        Area::new("inlay")
+            .anchor(Align2::RIGHT_TOP, vec2(0.0, 0.0))
+            .movable(false)
+            .show(ui.ctx(), |ui| {
+                Frame::none()
+                    .inner_margin(Margin::symmetric(10.0, 10.0))
+                    .show(ui, |ui| {
+                        ui.vertical(|ui| {
+                            self.display_inlay_list(ui);
+                        });
+                    });
+            });
+    }
+
+    fn display_inlay_text(
+        ui: &mut egui::Ui,
+        repr: &str,
+        view: MainViewView,
+        chord: Chord,
+        switch: &mut ViewState,
+    ) {
+        let text = RichText::new(format!("Press {} for {repr}", chord.display()));
+
+        let button = Button::new(text)
+            .small()
+            .frame(false)
+            .sense(Sense::click())
+            .wrap(false);
+
+        if ui.add(button).clicked() {
+            switch.switch_to_view(view);
+        }
+    }
+
+    fn display_inlay_list(&mut self, ui: &mut egui::Ui) {
+        use KeyAction::*;
+        use MainViewView::*;
+
+        for ((repr, view), chord) in [
+            ("Kappas", Start, SwitchToMain),
+            ("Settings", Settings, SwitchToSettings),
+        ]
+        .into_iter()
+        .flat_map(|(repr, view, chord)| {
+            Some((
+                (repr, view),
+                self.key_mapping.find_chords_reverse(&chord)?.first()?,
+            ))
+        }) {
+            Self::display_inlay_text(ui, repr, view, *chord, self.view);
+        }
     }
 }

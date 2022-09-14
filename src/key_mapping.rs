@@ -66,7 +66,11 @@ impl KeyMapping {
             .collect()
     }
 
-    pub fn reverse_mapping(&mut self) -> &mut [(KeyAction, Vec<Chord>)] {
+    pub fn reverse_mapping(&self) -> &[(KeyAction, Vec<Chord>)] {
+        &self.reverse
+    }
+
+    pub fn reverse_mapping_mut(&mut self) -> &mut [(KeyAction, Vec<Chord>)] {
         &mut self.reverse
     }
 
@@ -79,8 +83,17 @@ impl KeyMapping {
         }
     }
 
-    pub fn find_chords_reverse<'t>(&'t mut self, action: &KeyAction) -> Option<&'t mut Vec<Chord>> {
+    pub fn find_chords_reverse<'t>(&'t self, action: &KeyAction) -> Option<&'t Vec<Chord>> {
         self.reverse_mapping()
+            .iter()
+            .find_map(|(act, chords)| (act == action).then_some(chords))
+    }
+
+    pub fn find_chords_reverse_mut<'t>(
+        &'t mut self,
+        action: &KeyAction,
+    ) -> Option<&'t mut Vec<Chord>> {
+        self.reverse_mapping_mut()
             .iter_mut()
             .find_map(|(act, chords)| (act == action).then_some(chords))
     }

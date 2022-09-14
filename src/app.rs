@@ -1,104 +1,28 @@
+use egui_extras::RetainedImage;
+
 use crate::{
     helix,
     state::{AppState, BorrowedPersistState},
     widgets::{MainView, MainViewView},
-    CachedImages, SETTINGS_KEY,
+    TwitchImage, SETTINGS_KEY,
 };
 
 pub struct App {
     context: egui::Context,
-
-    client: helix::Client,
-    cached_images: CachedImages,
-
     pub app: AppState,
 }
 
 impl App {
-    pub fn new(context: egui::Context, state: AppState) -> Self {
+    pub fn new(context: egui::Context, mut state: AppState) -> Self {
+        state.state.chat_view_state.add_channel(0, "#museun");
+        state.state.chat_view_state.add_channel(1, "#testing");
+        state.state.chat_view_state.chatters_mut(0).unwrap().1 =
+            helix::Client::chatters_json(include_str!("../chatters.json")).unwrap();
+
         Self {
             context,
-
-            client: helix::Client::default(),
-            cached_images: CachedImages::default(),
-
             app: state,
         }
-    }
-
-    fn try_read(&mut self) -> bool {
-        match &self.app.twitch {
-            Some(twitch) => self
-                .app
-                .interaction
-                .poll(twitch)
-                .expect("FIXME: this should reset the state"), // XXX: what does this mean?
-            _ => return false,
-        }
-
-        let msg = match self.app.interaction.try_read() {
-            Some(item) => item,
-            _ => return false,
-        };
-
-        self.app.state.messages.push(msg);
-
-        // use twitch::Command::*;
-        // match msg.command {
-        //     Join => {
-        //         let join = msg.as_join().expect("join message should be valid");
-        //         if self.is_our_name(join.user) {
-        //             let chatters = self
-        //                 .client
-        //                 .get_chatters_for(join.channel.strip_prefix('#').unwrap_or(join.channel))
-        //                 .unwrap();
-
-        //             self.app
-        //                 .tabs
-        //                 .get_mut(join.channel)
-        //                 .update_chatters(chatters);
-        //             self.app.tabs.set_active_by_name(join.channel)
-        //         }
-        //     }
-
-        //     Part => {
-        //         let part = msg.as_part().expect("part message should be valid");
-        //         if self.is_our_name(part.user) {
-        //             self.app.tabs.remove_tab(part.channel);
-        //         }
-        //     }
-
-        //     Privmsg => {
-        //         let pm = msg.as_privmsg().expect("privmsg message should be valid");
-        //         let color = pm.color();
-        //         let spans = vec![];
-
-        //         // let spans = pm
-        //         //     .emote_span()
-        //         //     .into_iter()
-        //         //     .map(|kind| match kind {
-        //         //         twitch::TextKind::Text(inner) => {
-        //         //             twitch::TextKind::Text(Cow::Owned(inner.to_string()))
-        //         //         }
-        //         //         twitch::TextKind::Emote(id) => twitch::TextKind::Emote(id),
-        //         //     })
-        //         //     .collect();
-
-        //         let line = TwitchLine::new(
-        //             pm.sender, pm.target, //
-        //             pm.data, spans,
-        //         )
-        //         .with_color(color);
-        //         self.app
-        //             .tabs
-        //             .get_mut(&line.source)
-        //             .append(tabs::Line::Twitch { line });
-        //     }
-
-        // _ => {}
-        // }
-
-        true
     }
 
     const fn is_connected(&self) -> bool {
@@ -106,11 +30,14 @@ impl App {
     }
 
     fn toggle_tab_bar(&mut self) {
-        // self.app.showing_tab_bar = !self.app.showing_tab_bar;
+        self.app.state.chat_view_state.toggle_tab_bar();
     }
 
     fn toggle_user_list(&mut self) {
-        // self.app.tabs.active_mut().toggle_user_list()
+        let active = self.app.state.chat_view_state.active();
+        if let Some((visible, _)) = self.app.state.chat_view_state.chatters_mut(active).as_mut() {
+            *visible = !*visible;
+        }
     }
 
     fn toggle_line_mode(&mut self) {
@@ -122,30 +49,101 @@ impl App {
     }
 
     fn next_tab(&mut self) {
-        // self.app.tabs.next_tab()
+        self.app.state.chat_view_state.next();
     }
 
     fn previous_tab(&mut self) {
-        // self.app.tabs.previous_tab()
+        self.app.state.chat_view_state.previous();
     }
 
     fn try_set_active_tab(&mut self, index: usize) {
-        // self.app.tabs.set_active(index);
+        self.app.state.chat_view_state.set_active(index)
     }
 
     fn switch_to_settings(&mut self) {
-        self.switch_to_view(MainViewView::Settings)
+        self.app
+            .state
+            .view_state
+            .switch_to_view(MainViewView::Settings)
     }
 
     fn switch_to_main(&mut self) {
-        self.switch_to_view(self.app.state.previous_view)
+        self.app
+            .state
+            .view_state
+            .switch_to_view(self.app.state.view_state.previous_view)
     }
 
-    fn switch_to_view(&mut self, view: MainViewView) {
-        if self.app.state.current_view == view {
+    fn try_fetch_image(&mut self) {
+        let (image, data) = match self.app.runtime.fetch.try_next() {
+            Some((image, data)) => (image, data),
+            _ => return,
+        };
+
+        if self.app.state.images.contains_key(image.id()) {
             return;
         }
-        self.app.state.previous_view = std::mem::replace(&mut self.app.state.current_view, view);
+
+        match RetainedImage::from_image_bytes(image.name(), &data) {
+            Ok(data) => {
+                self.app.state.images.insert(image.id().to_string(), data);
+            }
+            Err(err) => {
+                eprintln!("cannot create ({}) {} : {err}", image.id(), image.name())
+            }
+        }
+    }
+
+    fn try_poll_twitch(&mut self) {
+        let twitch = match &self.app.twitch {
+            Some(twitch) => twitch,
+            _ => return,
+        };
+
+        self.app
+            .interaction
+            .poll(twitch)
+            .expect("FIXME: this should reset the state"); // XXX: what does this mean?
+    }
+
+    fn try_read_message(&mut self) {
+        let msg = match self.app.interaction.try_read() {
+            Some(item) => item,
+            _ => return,
+        };
+
+        if let Some(pm) = msg.as_privmsg() {
+            pm.update_emote_map(&mut self.app.state.emote_map);
+
+            let (id, spans) = pm.make_spans();
+            self.app.state.spanned_lines.insert(id, spans); // TODO this should be bounded
+
+            for (emote, _) in pm.emotes() {
+                if self.app.state.images.contains_key(emote) {
+                    continue;
+                }
+
+                let name = match self.app.state.emote_map.get(emote) {
+                    Some(name) => name,
+                    None => {
+                        eprintln!("emote missing: {emote}");
+                        continue;
+                    }
+                };
+
+                // TODO also fetch the light one
+                let url =
+                    format!("https://static-cdn.jtvnw.net/emoticons/v2/{emote}/static/dark/3.0");
+
+                self.app.runtime.fetch.fetch(TwitchImage::Emote {
+                    id: emote.to_string(),
+                    name: name.to_string(),
+                    url,
+                })
+            }
+        }
+
+        self.app.state.messages.push(msg);
     }
 
     fn try_handle_key_press(&mut self) {
@@ -207,9 +205,10 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
-        self.try_read();
+        self.try_poll_twitch();
+        self.try_fetch_image();
+        self.try_read_message();
         self.try_handle_key_press();
-
         egui::CentralPanel::default().show(ctx, |ui| MainView::new(&mut self.app).display(ui));
     }
 

@@ -96,24 +96,15 @@ impl OAuth {
 }
 
 pub struct Client {
-    oauth: Option<OAuth>,
+    oauth: OAuth,
     agent: ureq::Agent,
 }
 
-impl Default for Client {
-    fn default() -> Self {
-        Self {
-            oauth: None,
-            agent: ureq::agent(),
-        }
-    }
-}
-
 impl Client {
-    pub fn fetch_oauth(&mut self, client_id: &str, client_secret: &str) -> anyhow::Result<()> {
-        let oauth = OAuth::create(self.agent.clone(), client_id, client_secret)?;
-        self.oauth.replace(oauth);
-        Ok(())
+    pub fn fetch_oauth(client_id: &str, client_secret: &str) -> anyhow::Result<Self> {
+        let agent = ureq::agent();
+        let oauth = OAuth::create(agent.clone(), client_id, client_secret)?;
+        Ok(Self { oauth, agent })
     }
 
     pub fn get_chatters_for(&self, channel: &str) -> anyhow::Result<Chatters> {
@@ -128,7 +119,11 @@ impl Client {
         Self::chatters_json(&resp)
     }
 
-    pub fn get_badges_for(&self, id: &str) -> anyhow::Result<Vec<Badges>> {
+    pub fn get_emotes(&self) -> anyhow::Result<Vec<Emotes>> {
+        self.get_response("chat/emotes/global", [])
+    }
+
+    pub fn get_badges(&self) -> anyhow::Result<Vec<Badges>> {
         self.get_response("chat/badges/global", [])
     }
 
@@ -146,15 +141,6 @@ impl Client {
     where
         T: for<'de> serde::Deserialize<'de>,
     {
-        let (client_id, bearer_token) = match &self.oauth {
-            Some(OAuth {
-                client_id,
-                bearer_token,
-                ..
-            }) => (client_id, bearer_token),
-            _ => anyhow::bail!("OAuth creds haven't be retrieved yet"),
-        };
-
         #[derive(serde::Deserialize)]
         struct Resp<T> {
             data: Vec<T>,
@@ -164,13 +150,29 @@ impl Client {
         let req = query.into_iter().fold(req, |req, (k, v)| req.query(k, v));
 
         let req = [
-            ("client-id", &client_id), //
-            ("authorization", &bearer_token),
+            ("client-id", &self.oauth.client_id), //
+            ("authorization", &self.oauth.bearer_token),
         ]
         .into_iter()
         .fold(req, |req, (k, v)| req.set(k, v));
 
+        #[cfg(feature = "save_http_json")]
+        let resp: Resp<T> = {
+            let s = req.call()?.into_string()?;
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64;
+            let ep = ep.replace('/', "_");
+            let path = format!("{ep}_{now}.json");
+            eprintln!("saving json to: {path}");
+            std::fs::write(path, &s).unwrap();
+            serde_json::from_str(&s)?
+        };
+
+        #[cfg(not(feature = "save_http_json"))]
         let resp: Resp<T> = req.call()?.into_json()?;
+
         Ok(resp.data)
     }
 
@@ -230,6 +232,16 @@ pub struct Stream {
     pub title: String,
     #[serde(with = "time::serde::rfc3339")]
     pub started_at: time::OffsetDateTime,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct Emotes {
+    pub format: Vec<String>,
+    pub id: String,
+    pub images: HashMap<String, String>,
+    pub name: String,
+    pub scale: Vec<String>,
+    pub theme_mode: Vec<String>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]

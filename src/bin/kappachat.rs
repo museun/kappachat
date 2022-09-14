@@ -3,7 +3,7 @@
 use eframe::{NativeOptions, Storage};
 
 use kappachat::{
-    kappas,
+    helix, kappas,
     state::{AppState, PersistState},
     EnvConfig, SETTINGS_KEY,
 };
@@ -85,7 +85,18 @@ fn main() -> anyhow::Result<()> {
 
             cc.egui_ctx.set_pixels_per_point(state.pixels_per_point);
 
-            let state = AppState::new(kappas, state);
+            let helix = poll_promise::Promise::spawn_thread("helix_initialization", {
+                let config = state.env_config.clone();
+                move || {
+                    helix::Client::fetch_oauth(
+                        &config.twitch_client_id,
+                        &config.twitch_client_secret,
+                    )
+                    .expect("fetch")
+                }
+            });
+
+            let state = AppState::new(cc.egui_ctx.clone(), kappas, state, helix);
             Box::new(kappachat::App::new(cc.egui_ctx.clone(), state))
         }),
     );

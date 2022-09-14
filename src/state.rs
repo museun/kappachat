@@ -1,13 +1,34 @@
-use std::hash::{Hash, Hasher};
+use std::{
+    collections::HashMap,
+    hash::{Hash, Hasher},
+};
+
+use egui_extras::RetainedImage;
 
 use crate::{
-    twitch,
+    emote_map, helix,
+    twitch::{self, EmoteSpan},
     widgets::{
         settings::KeybindingsState, settings::TwitchChannelsState, settings::TwitchSettingsState,
-        MainViewState, MainViewView, SettingsState, StartState,
+        ChatViewState, MainViewState, MainViewView, SettingsState, StartState,
     },
-    Channel, EnvConfig, Interaction, KeyMapping, Queue, RequestPaint,
+    Channel, EnvConfig, FetchQueue, Interaction, KeyMapping, Queue, RequestPaint, TwitchImage,
 };
+
+#[derive(Default)]
+pub struct ViewState {
+    pub current_view: MainViewView,
+    pub previous_view: MainViewView,
+}
+
+impl ViewState {
+    pub fn switch_to_view(&mut self, view: MainViewView) {
+        if self.current_view == view {
+            return;
+        }
+        self.previous_view = std::mem::replace(&mut self.current_view, view);
+    }
+}
 
 #[derive(Default)]
 pub struct State {
@@ -19,12 +40,18 @@ pub struct State {
     pub twitch_channels: TwitchChannelsState,
     pub twitch_settings: TwitchSettingsState,
     pub keybind_state: KeybindingsState,
-    pub current_view: MainViewView,
-    pub previous_view: MainViewView,
     pub start_state: StartState,
+    pub chat_view_state: ChatViewState,
+
+    pub view_state: ViewState,
 
     pub main_view: MainViewState,
     pub messages: Queue<twitch::Message>,
+
+    pub spanned_lines: HashMap<uuid::Uuid, Vec<EmoteSpan>>,
+
+    pub emote_map: HashMap<String, String>,
+    pub images: HashMap<String, RetainedImage>,
 }
 
 impl State {
@@ -36,12 +63,17 @@ impl State {
     }
 }
 
-#[derive(Default)]
+pub struct Runtime {
+    pub helix: poll_promise::Promise<helix::Client>,
+    pub fetch: FetchQueue<TwitchImage>,
+}
+
 pub struct AppState {
     pub twitch: Option<twitch::Twitch>,
     pub identity: Option<twitch::Identity>,
     pub interaction: Interaction,
     pub state: State,
+    pub runtime: Runtime,
 }
 
 impl AppState {
@@ -93,7 +125,12 @@ impl AppState {
 }
 
 impl AppState {
-    pub fn new(kappas: Vec<egui_extras::RetainedImage>, persist: PersistState) -> Self {
+    pub fn new(
+        repaint: impl RequestPaint + 'static,
+        kappas: Vec<egui_extras::RetainedImage>,
+        persist: PersistState,
+        helix: poll_promise::Promise<helix::Client>,
+    ) -> Self {
         Self {
             state: State {
                 pixels_per_point: persist.pixels_per_point,
@@ -104,9 +141,16 @@ impl AppState {
                     kappas,
                     ..Default::default()
                 },
+                emote_map: emote_map(),
                 ..Default::default()
             },
-            ..Default::default()
+            runtime: Runtime {
+                helix,
+                fetch: FetchQueue::new(repaint),
+            },
+            twitch: Default::default(),
+            identity: Default::default(),
+            interaction: Default::default(),
         }
     }
 }

@@ -17,7 +17,7 @@ mod edit_box;
 pub use edit_box::EditBox;
 
 mod main;
-pub use main::{MainView, MainViewState, MainViewView};
+pub use main::{ChatViewState, MainView, MainViewState, MainViewView};
 
 pub mod settings;
 pub use settings::{ActiveSettingsView, SettingsState, SettingsView};

@@ -151,7 +151,7 @@ impl<'a> KeybindSettings<'a> {
             return;
         }
 
-        for (i, (action, chords)) in self.mapping.reverse_mapping().iter().enumerate() {
+        for (i, (action, chords)) in self.mapping.reverse_mapping_mut().iter().enumerate() {
             if i > 0 {
                 ui.separator();
             }
@@ -203,7 +203,7 @@ impl<'a> KeybindSettings<'a> {
     fn handle_remove(&mut self, action: KeyAction, index: usize) {
         if let Some(chords) = self
             .mapping
-            .reverse_mapping()
+            .reverse_mapping_mut()
             .iter_mut()
             .find_map(|(left, chords)| (*left == action).then_some(chords))
         {
@@ -217,11 +217,15 @@ impl<'a> KeybindSettings<'a> {
     fn handle_reset(&mut self, action: KeyAction) {
         let mut default = KeyMapping::default();
 
-        if let Some((left, right)) = self.mapping.find_chords_reverse(&action).and_then(|left| {
-            default
-                .find_chords_reverse(&action)
-                .map(|right| (left, right))
-        }) {
+        if let Some((left, right)) =
+            self.mapping
+                .find_chords_reverse_mut(&action)
+                .and_then(|left| {
+                    default
+                        .find_chords_reverse_mut(&action)
+                        .map(|right| (left, right))
+                })
+        {
             std::mem::swap(left, right);
             self.state.editing.reset();
             self.mapping.update_from_reverse();
@@ -257,7 +261,7 @@ impl<'a> KeybindSettings<'a> {
 
         match std::mem::take(&mut self.state.editing) {
             Add(action) => {
-                if let Some(chords) = self.mapping.find_chords_reverse(&action) {
+                if let Some(chords) = self.mapping.find_chords_reverse_mut(&action) {
                     chords.push(chord);
                 }
             }
@@ -281,7 +285,7 @@ impl<'a> KeybindSettings<'a> {
         index: usize,
     ) -> Option<&'b mut Chord> {
         self.mapping
-            .find_chords_reverse(action)
+            .find_chords_reverse_mut(action)
             .and_then(|s| s.get_mut(index))
     }
 
@@ -435,7 +439,7 @@ impl<'a> KeybindSettings<'a> {
             }
         }
 
-        for (i, (action, chords)) in self.mapping.reverse_mapping().iter().enumerate() {
+        for (i, (action, chords)) in self.mapping.reverse_mapping_mut().iter().enumerate() {
             if i > 0 {
                 let _ = writeln!(&mut self.state.buffer);
             }

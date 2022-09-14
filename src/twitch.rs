@@ -1,5 +1,4 @@
 use std::{
-    borrow::Cow,
     collections::HashMap,
     io::{BufRead, BufReader, Write},
     net::{Shutdown, TcpStream},
@@ -357,6 +356,18 @@ pub struct Privmsg<'a> {
     pub tags: &'a Tags,
 }
 
+#[test]
+fn span() {
+    let s = "@badge-info=;badges=broadcaster/1,premium/1;color=#FF0000;display-name=museun;emotes=81274:26-31/425618:49-51/25:4-8,14-18;first-msg=0;flags=;id=2392b87b-f84f-4acd-8fcb-96091de6249a;mod=0;returning-chatter=0;room-id=23196011;subscriber=0;tmi-sent-ts=1663111883128;turbo=0;user-id=23196011;user-type= :museun!museun@museun.tmi.twitch.tv PRIVMSG #museun :one Kappa two Kappa three VoHiYo and at the end: LUL\r\n";
+    let (id, spans) = Message::parse(s)
+        .unwrap()
+        .as_privmsg()
+        .unwrap()
+        .make_spans();
+    eprintln!("{id}");
+    eprintln!("{spans:#?}")
+}
+
 impl<'a> Privmsg<'a> {
     pub fn color(&self) -> Color {
         self.tags
@@ -367,51 +378,129 @@ impl<'a> Privmsg<'a> {
             .unwrap_or_default()
     }
 
-    pub fn emote_span(&self) -> Vec<TextKind<'_>> {
-        let (mut list, cursor) = self
-            .tags
+    pub fn id(&self) -> uuid::Uuid {
+        self.tags
+            .get_parsed::<uuid::Uuid>("id")
+            .transpose()
+            .ok()
+            .flatten()
+            .expect("valid uuid attached to message")
+    }
+
+    pub fn update_emote_map(&self, map: &mut HashMap<String, String>) {
+        let emotes = match self.tags.get("emotes") {
+            Some(emotes) => emotes,
+            None => return,
+        };
+
+        for (emote, (start, end)) in self.emotes() {
+            if map.contains_key(emote) {
+                continue;
+            }
+
+            let name: String = self.data.chars().skip(start).take(end).collect();
+            map.insert(emote.to_string(), name);
+        }
+    }
+
+    pub fn make_spans(&self) -> (uuid::Uuid, Vec<EmoteSpan>) {
+        let id = self.id();
+
+        let chars = self.data.trim_end().chars().collect::<Vec<_>>();
+        let mut emotes = self.emotes().collect::<Vec<_>>();
+        emotes.sort_unstable_by_key(|(_, r)| *r);
+
+        let trim_spaces = |data: &[char]| {
+            let tail = data
+                .iter()
+                .rev()
+                .take_while(|c| c.is_ascii_whitespace())
+                .count();
+            data.into_iter()
+                .take(data.len() - tail)
+                .skip_while(|c| c.is_ascii_whitespace())
+                .collect()
+        };
+
+        let mut spans = vec![];
+        let mut cursor = 0;
+
+        for (emote, (start, end)) in emotes {
+            if start != cursor {
+                spans.push(EmoteSpan::Text(trim_spaces(&chars[cursor..start])));
+            }
+            spans.push(EmoteSpan::Emote(emote.into()));
+            cursor = start + end;
+        }
+
+        if cursor != chars.len() {
+            spans.push(EmoteSpan::Text(trim_spaces(&chars[cursor..])))
+        }
+
+        (id, spans)
+    }
+
+    pub fn emotes(&self) -> impl Iterator<Item = (&str, (usize, usize))> {
+        self.tags
             .get("emotes")
             .into_iter()
             .flat_map(|s| s.split('/'))
             .flat_map(|c| c.split_once(':'))
-            .flat_map(|(emote, range)| {
-                emote
-                    .parse()
-                    .ok()
-                    .map(TextKind::Emote)
-                    .map(|emote| (emote, range))
-            })
             .flat_map(|(emote, range)| {
                 range
                     .split(',')
                     .flat_map(|c| c.split_once('-'))
                     .flat_map(|(start, end)| Some((start.parse().ok()?, end.parse().ok()?)))
                     .zip(std::iter::repeat(emote))
-                    .map(|(r, e)| (e, r))
+                    .map(|((start, end), e): ((usize, usize), _)| (e, (start, end - start + 1)))
             })
-            .fold(
-                (Vec::new(), 0),
-                |(mut v, cursor), (emote, (start, end)): (_, (_, usize))| {
-                    if start != cursor {
-                        v.push(TextKind::Text(self.data[cursor..start].into()));
-                    }
-                    v.push(emote);
-                    (v, end + 1)
-                },
-            );
-
-        if cursor != self.data.len() {
-            list.push(TextKind::Text(self.data[cursor..].into()))
-        }
-
-        list
     }
+
+    // pub fn emote_span(&self) -> Vec<TextKind<'_>> {
+    //     let (mut list, cursor) = self
+    //         .tags
+    //         .get("emotes")
+    //         .into_iter()
+    //         .flat_map(|s| s.split('/'))
+    //         .flat_map(|c| c.split_once(':'))
+    //         .flat_map(|(emote, range)| {
+    //             emote
+    //                 .parse()
+    //                 .ok()
+    //                 .map(TextKind::Emote)
+    //                 .map(|emote| (emote, range))
+    //         })
+    //         .flat_map(|(emote, range)| {
+    //             range
+    //                 .split(',')
+    //                 .flat_map(|c| c.split_once('-'))
+    //                 .flat_map(|(start, end)| Some((start.parse().ok()?, end.parse().ok()?)))
+    //                 .zip(std::iter::repeat(emote))
+    //                 .map(|(r, e)| (e, r))
+    //         })
+    //         .fold(
+    //             (Vec::new(), 0),
+    //             |(mut v, cursor), (emote, (start, end)): (_, (_, usize))| {
+    //                 if start != cursor {
+    //                     v.push(TextKind::Text(self.data[cursor..start].into()));
+    //                 }
+    //                 v.push(emote);
+    //                 (v, end + 1)
+    //             },
+    //         );
+
+    //     if cursor != self.data.len() {
+    //         list.push(TextKind::Text(self.data[cursor..].into()))
+    //     }
+
+    //     list
+    // }
 }
 
 #[derive(Clone, Debug)]
-pub enum TextKind<'a> {
-    Emote(usize),
-    Text(Cow<'a, str>),
+pub enum EmoteSpan {
+    Emote(String),
+    Text(String),
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]

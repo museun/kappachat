@@ -3,7 +3,7 @@ use egui::{Color32, Label, Layout, Response, RichText};
 use crate::{
     chat_layout::ChatLayout,
     tabs::{Line, Tab},
-    twitch::TextKind,
+    twitch::EmoteSpan,
 };
 
 pub struct LineWidget<'a> {
@@ -27,7 +27,7 @@ impl<'a> egui::Widget for LineWidget<'a> {
         let sender = Label::new(RichText::new(&line.sender).color(line.color));
 
         let data: Box<dyn FnOnce(&mut egui::Ui) -> Response> =
-            if !line.spans.iter().any(|c| matches!(c, TextKind::Emote(..))) {
+            if !line.spans.iter().any(|c| matches!(c, EmoteSpan::Emote(..))) {
                 Box::new(move |ui: &mut egui::Ui| {
                     ui.add(Label::new(RichText::new(&line.data).color(Color32::WHITE)).wrap(true))
                 }) as _
