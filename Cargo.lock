@@ -1190,7 +1190,6 @@ dependencies = [
  "heck",
  "image",
  "once_cell",
- "parking_lot",
  "poll-promise",
  "regex",
  "serde",
