@@ -67,7 +67,7 @@ impl<'a> MainView<'a> {
                         return;
                     }
 
-                    self.app.state.view_state.current_view = MainViewView::Foo;
+                    self.app.state.view_state.current_view = MainViewView::Connecting;
                 }
             }
 

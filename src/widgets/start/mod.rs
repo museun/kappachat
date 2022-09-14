@@ -42,6 +42,11 @@ impl<'a> StartView<'a> {
             self.state.kappa_index = fastrand::usize(0..self.state.kappas.len());
         }
     }
+
+    fn force_random(&mut self) {
+        self.state.last = Instant::now();
+        self.state.kappa_index = fastrand::usize(0..self.state.kappas.len());
+    }
 }
 
 impl<'a> StartView<'a> {
@@ -82,6 +87,10 @@ impl<'a> StartView<'a> {
                         ui.add(egui::Image::new(img_id, img_size / vec2(6.0, 6.0)));
                     });
                 });
+
+            if resp.secondary_clicked() {
+                self.force_random();
+            }
 
             if resp.hovered() && ui.ctx().input().modifiers.shift_only() {
                 if !self.state.start_rotation.hovered {

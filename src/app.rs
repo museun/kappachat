@@ -4,6 +4,7 @@ use egui::{vec2, Grid, ScrollArea, Window};
 use egui_extras::RetainedImage;
 
 use crate::{
+    helix,
     state::{AppState, BorrowedPersistState},
     widgets::{MainView, MainViewView},
     TwitchImage, SETTINGS_KEY,
@@ -70,7 +71,15 @@ impl App {
         vs.switch_to_view(vs.previous_view)
     }
 
-    fn try_fetch_chatters(&mut self) {}
+    fn try_fetch_chatters(&mut self) {
+        // for (room_id, name) in self.app.state.chat_view_state.channels() {
+        //     if let Ok(chatters) = helix::Client::get_chatters_for(name) {
+        //         if let Some((_, ch)) = self.app.state.chat_view_state.chatters_mut(room_id) {
+        //             *ch = chatters
+        //         }
+        //     }
+        // }
+    }
 
     fn try_fetch_badges(&mut self) {
         const DESIRED_USER_LIST_BADGES: [&str; 8] = [

@@ -57,7 +57,7 @@ impl TwitchImage {
     pub fn name(&self) -> &str {
         use TwitchImageKind::*;
         match &self.kind {
-            Emote { name, .. } | Badge { set_id: name, .. } => &name,
+            Emote { id: name, .. } | Badge { set_id: name, .. } => &name,
         }
     }
 }

@@ -108,14 +108,12 @@ impl Client {
         Ok(Self { oauth, agent })
     }
 
-    pub fn get_chatters_for(&self, channel: &str) -> anyhow::Result<Chatters> {
-        let resp = self
-            .agent
-            .get(&format!(
-                "https://tmi.twitch.tv/group/user/{channel}/chatters"
-            ))
-            .call()?
-            .into_string()?;
+    pub fn get_chatters_for(channel: &str) -> anyhow::Result<Chatters> {
+        let resp = ureq::get(&format!(
+            "https://tmi.twitch.tv/group/user/{channel}/chatters"
+        ))
+        .call()?
+        .into_string()?;
 
         Self::chatters_json(&resp)
     }
