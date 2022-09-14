@@ -67,7 +67,7 @@ impl<'a> MainView<'a> {
                         return;
                     }
 
-                    self.app.state.view_state.current_view = MainViewView::Connecting;
+                    self.app.state.view_state.current_view = MainViewView::Foo;
                 }
             }
 
@@ -239,14 +239,14 @@ impl ChannelState {
 pub struct ChatViewState {
     map: HashMap<RoomId, String>,
     state: ChannelState,
-    channels: Vec<Index>,
+    channels: Vec<RoomId>,
     active: Index,
     tab_bar_hidden: bool,
 }
 
 impl ChatViewState {
-    pub fn active(&self) -> Index {
-        self.active
+    pub fn active(&self) -> Option<Index> {
+        self.channels.get(self.active).copied()
     }
 
     pub fn set_active(&mut self, index: Index) {
@@ -351,7 +351,10 @@ impl<'a> ChatView<'a> {
 
     fn display(self, ui: &mut egui::Ui) {
         let cvs = &mut self.state.state.chat_view_state;
-        let active = cvs.active();
+        let active = match cvs.active() {
+            Some(active) => active,
+            None => return,
+        };
 
         let buf = match cvs.state.edit_buffers.get_mut(&active) {
             Some(buf) => buf,

@@ -4,7 +4,6 @@ use egui::{vec2, Grid, ScrollArea, Window};
 use egui_extras::RetainedImage;
 
 use crate::{
-    helix,
     state::{AppState, BorrowedPersistState},
     widgets::{MainView, MainViewView},
     TwitchImage, SETTINGS_KEY,
@@ -33,9 +32,14 @@ impl App {
 
     fn toggle_user_list(&mut self) {
         let cvs = &mut self.app.state.chat_view_state;
-        let active = cvs.active();
-        if let Some((visible, _)) = cvs.chatters_mut(active).as_mut() {
+        let id = match cvs.active() {
+            Some(id) => id,
+            None => return,
+        };
+
+        if let Some((visible, _)) = cvs.chatters_mut(id).as_mut() {
             *visible = !*visible;
+            self.app.runtime.chatters_update.request_update(id);
         }
     }
 
@@ -72,13 +76,11 @@ impl App {
     }
 
     fn try_fetch_chatters(&mut self) {
-        // for (room_id, name) in self.app.state.chat_view_state.channels() {
-        //     if let Ok(chatters) = helix::Client::get_chatters_for(name) {
-        //         if let Some((_, ch)) = self.app.state.chat_view_state.chatters_mut(room_id) {
-        //             *ch = chatters
-        //         }
-        //     }
-        // }
+        for ((room_id, channel), chatters) in self.app.runtime.chatters_update.poll() {
+            if let Some((_, old)) = self.app.state.chat_view_state.chatters_mut(room_id) {
+                *old = chatters;
+            }
+        }
     }
 
     fn try_fetch_badges(&mut self) {
@@ -271,6 +273,7 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
         self.try_poll_twitch();
         self.try_fetch_badges();
+        self.try_fetch_chatters();
         self.try_fetch_image();
         self.try_read_message();
         self.try_handle_key_press();

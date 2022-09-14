@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 use crate::{
     helix::{self},
+    task_queue::UserListUpdate,
     twitch::{self, EmoteSpan},
     widgets::{
         settings::KeybindingsState, settings::TwitchChannelsState, settings::TwitchSettingsState,
@@ -96,6 +97,7 @@ impl State {
 pub struct Runtime {
     pub helix: poll_promise::Promise<helix::Client>,
     pub fetch: FetchQueue<TwitchImage>,
+    pub chatters_update: UserListUpdate,
     pub global_badges: poll_promise::Promise<Vec<helix::Badges>>,
     pub helix_ready: flume::Sender<helix::Client>,
 }
@@ -179,6 +181,7 @@ impl AppState {
             },
             runtime: Runtime {
                 helix,
+                chatters_update: UserListUpdate::new(),
                 fetch: FetchQueue::new(repaint),
                 helix_ready: tx,
                 global_badges: poll_promise::Promise::spawn_thread("global_badges", {

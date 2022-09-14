@@ -120,8 +120,6 @@ where
 
         let agent = ureq::agent();
         for item in queue {
-            eprintln!("fetching: {item:?}");
-
             let mut body = match fetch(&agent, &*item.url()) {
                 Ok(body) => body,
                 _ => {
