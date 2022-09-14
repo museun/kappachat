@@ -6,7 +6,7 @@ use std::{
 use egui_extras::RetainedImage;
 
 use crate::{
-    emote_map, helix,
+    helix,
     twitch::{self, EmoteSpan},
     widgets::{
         settings::KeybindingsState, settings::TwitchChannelsState, settings::TwitchSettingsState,
@@ -141,7 +141,6 @@ impl AppState {
                     kappas,
                     ..Default::default()
                 },
-                emote_map: emote_map(),
                 ..Default::default()
             },
             runtime: Runtime {
