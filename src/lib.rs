@@ -32,12 +32,6 @@ pub use key_mapping::{Chord, KeyAction, KeyHelper, KeyMapping};
 pub mod helix;
 pub use helix::CachedImages;
 
-pub mod tabs;
-pub use tabs::{Line, Tabs};
-
-mod line;
-pub use line::TwitchLine;
-
 mod chat_layout;
 pub use chat_layout::ChatLayout;
 
