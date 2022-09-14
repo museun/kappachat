@@ -32,9 +32,6 @@ pub use key_mapping::{Chord, KeyAction, KeyHelper, KeyMapping};
 pub mod helix;
 pub use helix::CachedImages;
 
-mod chat_layout;
-pub use chat_layout::ChatLayout;
-
 mod queue;
 pub use queue::Queue;
 
@@ -116,18 +113,23 @@ pub enum TwitchImage {
         name: String,
         url: String,
     },
+    Badge {
+        id: String, // set?
+        name: String,
+        url: String,
+    },
 }
 
 impl TwitchImage {
     pub fn id(&self) -> &str {
         match self {
-            Self::Emote { id, .. } => id,
+            Self::Emote { id, .. } | Self::Badge { id, .. } => id,
         }
     }
 
     pub fn name(&self) -> &str {
         match self {
-            Self::Emote { name, .. } => name,
+            Self::Emote { name, .. } | Self::Badge { name, .. } => name,
         }
     }
 }
@@ -135,7 +137,7 @@ impl TwitchImage {
 impl FetchUrl for TwitchImage {
     fn url(&self) -> std::borrow::Cow<'_, str> {
         match self {
-            Self::Emote { url, .. } => url.into(),
+            Self::Emote { url, .. } | Self::Badge { url, .. } => url.into(),
         }
     }
 }
