@@ -21,45 +21,30 @@ impl RequestPaint for egui::Context {
 pub struct NoopRepaint;
 impl RequestPaint for NoopRepaint {}
 
+pub mod app;
+mod channel;
+mod config;
+mod fetch;
+pub mod font_icon;
+pub mod helix;
+mod image_cache;
+mod interaction;
+pub mod kappas;
+mod key_mapping;
+mod queue;
 pub mod state;
-
+mod task_queue;
+pub mod twitch;
+mod user_list_updater;
 pub mod widgets;
 
-mod config;
-pub use config::EnvConfig;
-
-mod key_mapping;
-pub use key_mapping::{Chord, KeyAction, KeyHelper, KeyMapping};
-
-pub mod helix;
-pub use helix::CachedImages;
-
-mod queue;
-pub use queue::Queue;
-
-pub mod twitch;
-
-mod ext;
-pub use ext::JobExt as _;
-
-mod interaction;
-pub use interaction::Interaction;
-
-pub mod kappas;
-
-pub mod font_icon;
-
-mod channel;
-pub use channel::Channel;
-
-pub mod app;
 pub use app::App;
-
-mod task_queue;
-pub use task_queue::TaskQueue;
-
-mod fetch;
+pub use channel::Channel;
+pub use config::EnvConfig;
 pub use fetch::{FetchQueue, FetchUrl, TwitchImage};
-
-mod image_cache;
 pub use image_cache::ImageCache;
+pub use interaction::Interaction;
+pub use key_mapping::{Chord, KeyAction, KeyHelper, KeyMapping};
+pub use queue::Queue;
+pub use task_queue::TaskQueue;
+use user_list_updater::UserListUpdater;

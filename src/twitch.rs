@@ -234,7 +234,7 @@ pub struct Identity {
     pub color: Color,
 }
 
-#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct Tags {
     inner: HashMap<String, String>,
 }
@@ -299,7 +299,7 @@ impl Command {
     }
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum Prefix {
     User { name: String },
     Server { host: String },
@@ -356,18 +356,6 @@ pub struct Privmsg<'a> {
     pub tags: &'a Tags,
 }
 
-#[test]
-fn span() {
-    let s = "@badge-info=;badges=broadcaster/1,premium/1;color=#FF0000;display-name=museun;emotes=81274:26-31/425618:49-51/25:4-8,14-18;first-msg=0;flags=;id=2392b87b-f84f-4acd-8fcb-96091de6249a;mod=0;returning-chatter=0;room-id=23196011;subscriber=0;tmi-sent-ts=1663111883128;turbo=0;user-id=23196011;user-type= :museun!museun@museun.tmi.twitch.tv PRIVMSG #museun :one Kappa two Kappa three VoHiYo and at the end: LUL\r\n";
-    let (id, spans) = Message::parse(s)
-        .unwrap()
-        .as_privmsg()
-        .unwrap()
-        .make_spans();
-    eprintln!("{id}");
-    eprintln!("{spans:#?}")
-}
-
 impl<'a> Privmsg<'a> {
     pub fn color(&self) -> Color {
         self.tags
@@ -416,7 +404,7 @@ impl<'a> Privmsg<'a> {
                 .rev()
                 .take_while(|c| c.is_ascii_whitespace())
                 .count();
-            data.into_iter()
+            data.iter()
                 .take(data.len() - tail)
                 .skip_while(|c| c.is_ascii_whitespace())
                 .collect()
@@ -440,6 +428,14 @@ impl<'a> Privmsg<'a> {
         (id, spans)
     }
 
+    pub fn badges(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.tags
+            .get("badges")
+            .into_iter()
+            .flat_map(|c| c.split(','))
+            .flat_map(|c| c.split_once('/'))
+    }
+
     pub fn emotes(&self) -> impl Iterator<Item = (&str, (usize, usize))> {
         self.tags
             .get("emotes")
@@ -455,55 +451,16 @@ impl<'a> Privmsg<'a> {
                     .map(|((start, end), e): ((usize, usize), _)| (e, (start, end - start + 1)))
             })
     }
-
-    // pub fn emote_span(&self) -> Vec<TextKind<'_>> {
-    //     let (mut list, cursor) = self
-    //         .tags
-    //         .get("emotes")
-    //         .into_iter()
-    //         .flat_map(|s| s.split('/'))
-    //         .flat_map(|c| c.split_once(':'))
-    //         .flat_map(|(emote, range)| {
-    //             emote
-    //                 .parse()
-    //                 .ok()
-    //                 .map(TextKind::Emote)
-    //                 .map(|emote| (emote, range))
-    //         })
-    //         .flat_map(|(emote, range)| {
-    //             range
-    //                 .split(',')
-    //                 .flat_map(|c| c.split_once('-'))
-    //                 .flat_map(|(start, end)| Some((start.parse().ok()?, end.parse().ok()?)))
-    //                 .zip(std::iter::repeat(emote))
-    //                 .map(|(r, e)| (e, r))
-    //         })
-    //         .fold(
-    //             (Vec::new(), 0),
-    //             |(mut v, cursor), (emote, (start, end)): (_, (_, usize))| {
-    //                 if start != cursor {
-    //                     v.push(TextKind::Text(self.data[cursor..start].into()));
-    //                 }
-    //                 v.push(emote);
-    //                 (v, end + 1)
-    //             },
-    //         );
-
-    //     if cursor != self.data.len() {
-    //         list.push(TextKind::Text(self.data[cursor..].into()))
-    //     }
-
-    //     list
-    // }
 }
 
 #[derive(Clone, Debug)]
 pub enum EmoteSpan {
     Emote(String),
     Text(String),
+    // TODO hyper link
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Message {
     pub tags: Tags,
     pub prefix: Prefix,

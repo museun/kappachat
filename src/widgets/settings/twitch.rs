@@ -153,7 +153,7 @@ impl<'a> TwitchSettings<'a> {
     const CLIENT_ID_LABEL: &'static str = "Client-Id";
     const CLIENT_SECRET_LABEL: &'static str = "Client-Secret";
 
-    const LABELS: [(&'static str, fn(&str) -> Validation, fn(&mut egui::Ui)); 4] = [
+    const LABELS: [LabelMaker; 4] = [
         (Self::NAME_LABEL, Self::validate_name, Self::label_for_name),
         (
             Self::OAUTH_TOKEN_LABEL,
@@ -172,6 +172,8 @@ impl<'a> TwitchSettings<'a> {
         ),
     ];
 }
+
+type LabelMaker = (&'static str, fn(&str) -> Validation, fn(&mut egui::Ui));
 
 #[derive(Copy, Clone)]
 enum Validation {

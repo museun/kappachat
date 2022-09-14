@@ -5,8 +5,8 @@ use egui_extras::RetainedImage;
 
 use crate::{
     state::{AppState, BorrowedPersistState},
-    widgets::{MainView, MainViewView},
-    TwitchImage, SETTINGS_KEY,
+    widgets::{Main, MainView},
+    Channel, TwitchImage, SETTINGS_KEY,
 };
 
 pub struct App {
@@ -31,16 +31,15 @@ impl App {
     }
 
     fn toggle_user_list(&mut self) {
-        let cvs = &mut self.app.state.chat_view_state;
-        let id = match cvs.active() {
-            Some(id) => id,
-            None => return,
+        let name = match self.find_active_channel() {
+            Some(channel) => {
+                channel.show_user_list = !channel.show_user_list;
+                channel.name.clone()
+            }
+            _ => return,
         };
 
-        if let Some((visible, _)) = cvs.chatters_mut(id).as_mut() {
-            *visible = !*visible;
-            self.app.runtime.chatters_update.request_update(id);
-        }
+        self.app.runtime.chatters_update.request_update(name);
     }
 
     fn toggle_line_mode(&mut self) {
@@ -48,7 +47,18 @@ impl App {
     }
 
     fn toggle_timestamps(&mut self) {
-        // self.app.tabs.active_mut().toggle_timestamps()
+        if let Some(channel) = self.find_active_channel() {
+            channel.show_timestamps = !channel.show_timestamps;
+        }
+    }
+
+    fn find_active_channel(&mut self) -> Option<&mut Channel> {
+        let active = self.app.state.chat_view_state.active()?;
+        self.app
+            .state
+            .channels
+            .iter_mut()
+            .find(|c| c.name == active.name())
     }
 
     fn next_tab(&mut self) {
@@ -64,10 +74,7 @@ impl App {
     }
 
     fn switch_to_settings(&mut self) {
-        self.app
-            .state
-            .view_state
-            .switch_to_view(MainViewView::Settings)
+        self.app.state.view_state.switch_to_view(MainView::Settings)
     }
 
     fn switch_to_main(&mut self) {
@@ -76,9 +83,9 @@ impl App {
     }
 
     fn try_fetch_chatters(&mut self) {
-        for ((room_id, channel), chatters) in self.app.runtime.chatters_update.poll() {
-            if let Some((_, old)) = self.app.state.chat_view_state.chatters_mut(room_id) {
-                *old = chatters;
+        for (channel, chatters) in self.app.runtime.chatters_update.poll() {
+            if let Some(channel) = self.app.state.chat_view_state.get_mut_by_name(&channel) {
+                *channel.chatters_mut() = chatters;
             }
         }
     }
@@ -176,36 +183,81 @@ impl App {
             Some(item) => item,
             _ => return,
         };
+        self.try_privmsg(&msg);
 
-        if let Some(pm) = msg.as_privmsg() {
-            pm.update_emote_map(&mut self.app.state.emote_map);
+        if let Some(join) = msg.as_join() {
+            if self.app.is_our_name(join.user) {
+                self.app.state.chat_view_state.add_channel(join.channel);
+                self.app.runtime.chatters_update.subscribe(join.channel);
+            }
+        }
 
-            let (id, spans) = pm.make_spans();
-            self.app.state.spanned_lines.insert(id, spans); // TODO this should be bounded
-
-            for (emote, _) in pm.emotes() {
-                if self.app.state.images.has(emote) {
-                    continue;
-                }
-
-                let name = match self.app.state.emote_map.get(emote) {
-                    Some(name) => name,
-                    None => {
-                        eprintln!("emote missing: {emote}");
-                        continue;
-                    }
-                };
-
-                // TODO also fetch the light one
-                let url =
-                    format!("https://static-cdn.jtvnw.net/emoticons/v2/{emote}/static/dark/3.0");
-
-                let emote = TwitchImage::emote(&emote, &name, url);
-                self.app.runtime.fetch.fetch(emote)
+        if let Some(part) = msg.as_part() {
+            if self.app.is_our_name(part.user) {
+                self.app.state.chat_view_state.remove_channel(part.channel);
+                self.app.runtime.chatters_update.unsubscribe(part.channel);
             }
         }
 
         self.app.state.messages.push(msg);
+    }
+
+    fn try_privmsg(&mut self, msg: &crate::twitch::Message) {
+        let pm = match msg.as_privmsg() {
+            Some(item) => item,
+            _ => return,
+        };
+
+        pm.update_emote_map(&mut self.app.state.emote_map);
+
+        let (id, spans) = pm.make_spans();
+
+        let active = match self.app.state.chat_view_state.get_mut_by_name(pm.target) {
+            Some(active) => active,
+            None => {
+                eprintln!(
+                    "!! we're not on {} but we got a msg: {}",
+                    pm.target,
+                    msg.raw.escape_debug()
+                );
+                return;
+            }
+        };
+
+        active.push_privmsg(id, spans, msg.clone());
+
+        for (emote, _) in pm.emotes() {
+            if self.app.state.images.has(emote) {
+                continue;
+            }
+
+            let name = match self.app.state.emote_map.get(emote) {
+                Some(name) => name,
+                None => {
+                    eprintln!("emote missing: {emote}");
+                    continue;
+                }
+            };
+
+            // TODO also fetch the light one
+            self.app.runtime.fetch.fetch(TwitchImage::emote(
+                &emote,
+                &name,
+                format!("https://static-cdn.jtvnw.net/emoticons/v2/{emote}/static/dark/3.0"),
+            ))
+        }
+    }
+
+    fn try_handle_user_input(&mut self) {
+        if let Ok(msg) = self.app.reader.try_recv() {
+            if let Some(ch) = self.app.state.chat_view_state.active() {
+                let _ = self.app.interaction.send_raw(format!(
+                    "PRIVMSG {} :{}\r\n",
+                    ch.name(),
+                    msg.trim()
+                ));
+            }
+        }
     }
 
     fn try_handle_key_press(&mut self) {
@@ -276,6 +328,7 @@ impl eframe::App for App {
         self.try_fetch_chatters();
         self.try_fetch_image();
         self.try_read_message();
+        self.try_handle_user_input();
         self.try_handle_key_press();
 
         Window::new("image cache")
@@ -310,7 +363,7 @@ impl eframe::App for App {
                 })
             });
 
-        egui::CentralPanel::default().show(ctx, |ui| MainView::new(&mut self.app).display(ui));
+        egui::CentralPanel::default().show(ctx, |ui| Main::new(&mut self.app).display(ui));
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {

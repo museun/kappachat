@@ -3,7 +3,7 @@ use egui::{style::Margin, vec2, Align2, Area, Frame, RichText, Sense};
 
 use crate::{state::ViewState, Chord, KeyAction, KeyMapping};
 
-use super::MainViewView;
+use super::MainView;
 
 pub struct Inlay<'a> {
     key_mapping: &'a mut KeyMapping,
@@ -33,7 +33,7 @@ impl<'a> Inlay<'a> {
     fn display_inlay_text(
         ui: &mut egui::Ui,
         repr: &str,
-        view: MainViewView,
+        view: MainView,
         chord: Chord,
         switch: &mut ViewState,
     ) {
@@ -52,7 +52,7 @@ impl<'a> Inlay<'a> {
 
     fn display_inlay_list(&mut self, ui: &mut egui::Ui) {
         use KeyAction::*;
-        use MainViewView::*;
+        use MainView::*;
 
         for ((repr, view), chord) in [
             ("Kappas", Start, SwitchToMain),

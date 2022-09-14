@@ -2,16 +2,14 @@ use egui::ScrollArea;
 
 use crate::state::State;
 
-mod keybind;
-pub use keybind::{KeybindSettings, KeybindingsState};
-
-mod display;
-pub use display::DisplaySettings;
-
 mod channel;
-pub use channel::{ChannelSettings, TwitchChannelsState};
-
+mod display;
+mod keybind;
 mod twitch;
+
+pub use channel::{ChannelSettings, TwitchChannelsState};
+pub use display::DisplaySettings;
+pub use keybind::{KeybindSettings, KeybindingsState};
 pub use twitch::{TwitchSettings, TwitchSettingsState};
 
 #[derive(Default, PartialEq, PartialOrd, Eq, Ord)]

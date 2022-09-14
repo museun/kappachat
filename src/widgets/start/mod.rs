@@ -4,7 +4,7 @@ use egui::{vec2, Align2, Area, Direction, Layout, Pos2, Rect, Sense, Vec2};
 
 use crate::{state::ViewState, KeyMapping};
 
-use super::MainViewView;
+use super::MainView;
 
 mod rotation;
 use rotation::StartRotation;
@@ -38,8 +38,7 @@ impl<'a> StartView<'a> {
 
     fn pick_random(&mut self) {
         if self.state.last.elapsed() > Self::DELAY {
-            self.state.last = Instant::now();
-            self.state.kappa_index = fastrand::usize(0..self.state.kappas.len());
+            self.force_random();
         }
     }
 
@@ -51,7 +50,7 @@ impl<'a> StartView<'a> {
 
 impl<'a> StartView<'a> {
     pub fn display(mut self, ui: &mut egui::Ui) -> bool {
-        Inlay::new(&mut self.key_mapping, &mut self.view).display(ui);
+        Inlay::new(self.key_mapping, self.view).display(ui);
 
         self.pick_random();
         ui.ctx().request_repaint_after(Self::DELAY);

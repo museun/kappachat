@@ -4,32 +4,33 @@ use std::{
 };
 
 use eframe::epaint::ahash::HashSet;
-use egui_extras::RetainedImage;
+
+use poll_promise::Promise;
 use uuid::Uuid;
 
 use crate::{
-    helix::{self},
-    task_queue::UserListUpdate,
-    twitch::{self, EmoteSpan},
-    widgets::{
-        settings::KeybindingsState, settings::TwitchChannelsState, settings::TwitchSettingsState,
-        ChatViewState, MainViewState, MainViewView, SettingsState, StartState,
-    },
-    Channel, EnvConfig, FetchQueue, Interaction, KeyMapping, Queue, RequestPaint, TwitchImage,
+    helix, twitch,
+    widgets::{state, MainView},
+    Channel, EnvConfig, FetchQueue, ImageCache, Interaction, KeyMapping, Queue, RequestPaint,
+    TwitchImage, UserListUpdater,
 };
 
 #[derive(Default)]
 pub struct ViewState {
-    pub current_view: MainViewView,
-    pub previous_view: MainViewView,
+    pub current_view: MainView,
+    pub previous_view: MainView,
 }
 
 impl ViewState {
-    pub fn switch_to_view(&mut self, view: MainViewView) {
+    pub fn switch_to_view(&mut self, view: MainView) {
         if self.current_view == view {
             return;
         }
         self.previous_view = std::mem::replace(&mut self.current_view, view);
+    }
+
+    pub fn swap(&mut self) {
+        std::mem::swap(&mut self.current_view, &mut self.previous_view)
     }
 }
 
@@ -41,48 +42,24 @@ pub struct State {
 
     pub channels: Vec<Channel>,
 
-    pub settings: SettingsState,
-    pub twitch_channels: TwitchChannelsState,
-    pub twitch_settings: TwitchSettingsState,
-    pub keybind_state: KeybindingsState,
-    pub start_state: StartState,
-    pub chat_view_state: ChatViewState,
+    pub chat_view_state: state::ChatViewState,
+
+    pub settings: state::SettingsState,
+    pub twitch_channels: state::TwitchChannelsState,
+    pub twitch_settings: state::TwitchSettingsState,
+    pub keybind_state: state::KeybindingsState,
+    pub start_state: state::StartState,
+    pub main_view: state::MainViewState,
+
     pub view_state: ViewState,
-    pub main_view: MainViewState,
 
     pub messages: Queue<twitch::Message>,
-    pub spanned_lines: HashMap<uuid::Uuid, Vec<EmoteSpan>>,
 
     pub emote_map: HashMap<String, String>,
     pub images: ImageCache,
     pub requested_images: HashSet<Uuid>,
 
     pub show_image_map: bool,
-}
-
-#[derive(Default)]
-pub struct ImageCache {
-    pub map: HashMap<Uuid, RetainedImage>,
-    pub lookup: HashMap<String, Uuid>,
-}
-
-impl ImageCache {
-    pub fn get(&self, key: &str) -> Option<&RetainedImage> {
-        self.map.get(self.lookup.get(key)?)
-    }
-
-    pub fn has(&self, key: &str) -> bool {
-        self.lookup.contains_key(key)
-    }
-
-    pub fn has_id(&self, id: Uuid) -> bool {
-        self.map.contains_key(&id)
-    }
-
-    pub fn add(&mut self, name: impl ToString, id: Uuid, image: RetainedImage) {
-        self.map.insert(id, image);
-        self.lookup.insert(name.to_string(), id);
-    }
 }
 
 impl State {
@@ -95,10 +72,10 @@ impl State {
 }
 
 pub struct Runtime {
-    pub helix: poll_promise::Promise<helix::Client>,
+    pub helix: Promise<helix::Client>,
     pub fetch: FetchQueue<TwitchImage>,
-    pub chatters_update: UserListUpdate,
-    pub global_badges: poll_promise::Promise<Vec<helix::Badges>>,
+    pub chatters_update: UserListUpdater,
+    pub global_badges: Promise<Vec<helix::Badges>>,
     pub helix_ready: flume::Sender<helix::Client>,
 }
 
@@ -108,6 +85,9 @@ pub struct AppState {
     pub interaction: Interaction,
     pub state: State,
     pub runtime: Runtime,
+
+    pub writer: flume::Sender<String>,
+    pub reader: flume::Receiver<String>,
 }
 
 impl AppState {
@@ -154,6 +134,15 @@ impl AppState {
         self.identity.replace(identity);
         self.twitch.replace(client.spawn_listen(painter));
 
+        for channel in self
+            .state
+            .channels
+            .iter()
+            .filter_map(|c| c.auto_join.then_some(&c.name))
+        {
+            self.join_channel(channel);
+        }
+
         Ok(())
     }
 }
@@ -163,9 +152,14 @@ impl AppState {
         repaint: impl RequestPaint + 'static,
         kappas: Vec<egui_extras::RetainedImage>,
         persist: PersistState,
-        helix: poll_promise::Promise<helix::Client>,
+        helix: Promise<helix::Client>,
     ) -> Self {
-        let (tx, rx) = flume::bounded(0);
+        fn default<T: Default>() -> T {
+            T::default()
+        }
+
+        let (helix_tx, helix_rx) = flume::bounded(0);
+        let (writer, reader) = flume::unbounded();
 
         Self {
             state: State {
@@ -173,27 +167,27 @@ impl AppState {
                 channels: persist.channels,
                 config: persist.env_config,
                 key_mapping: persist.key_mapping,
-                start_state: StartState {
-                    kappas,
-                    ..Default::default()
-                },
-                ..Default::default()
+                start_state: state::StartState::new(kappas),
+                ..default()
             },
             runtime: Runtime {
                 helix,
-                chatters_update: UserListUpdate::new(),
-                fetch: FetchQueue::new(repaint),
-                helix_ready: tx,
-                global_badges: poll_promise::Promise::spawn_thread("global_badges", {
+                chatters_update: UserListUpdater::create(),
+                fetch: FetchQueue::create(repaint),
+                helix_ready: helix_tx,
+                global_badges: Promise::spawn_thread("global_badges", {
                     move || {
-                        let helix = rx.recv().unwrap();
+                        let helix = helix_rx.recv().unwrap();
                         helix.get_badges().expect("get global badges")
                     }
                 }),
             },
-            twitch: Default::default(),
-            identity: Default::default(),
-            interaction: Default::default(),
+            twitch: default(),
+            identity: default(),
+            interaction: default(),
+
+            writer,
+            reader,
         }
     }
 }

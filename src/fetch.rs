@@ -32,7 +32,7 @@ impl TwitchImage {
         let uuid = Self::extract_uuid(&url).expect("uuid in url");
         Self {
             id: uuid,
-            url: url.to_string(),
+            url,
             kind: TwitchImageKind::Badge {
                 id: id.to_string(),
                 set_id: set_id.to_string(),
@@ -57,7 +57,7 @@ impl TwitchImage {
     pub fn name(&self) -> &str {
         use TwitchImageKind::*;
         match &self.kind {
-            Emote { id: name, .. } | Badge { set_id: name, .. } => &name,
+            Emote { id: name, .. } | Badge { set_id: name, .. } => name,
         }
     }
 }
@@ -84,7 +84,7 @@ where
     I: FetchUrl,
     I: std::fmt::Debug,
 {
-    pub fn new(repaint: impl RequestPaint + 'static) -> Self {
+    pub fn create(repaint: impl RequestPaint + 'static) -> Self {
         Self {
             queue: TaskQueue::new(repaint, Self::spawn),
         }

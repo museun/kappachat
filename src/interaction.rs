@@ -1,11 +1,13 @@
 use flume::{Receiver, Sender};
 
+use crate::twitch::{Message, Twitch};
+
 pub struct Interaction {
     sender_tx: Sender<String>,
     sender_rx: Receiver<String>,
 
-    receiver_tx: Sender<crate::twitch::Message>,
-    receiver_rx: Receiver<crate::twitch::Message>,
+    receiver_tx: Sender<Message>,
+    receiver_rx: Receiver<Message>,
 }
 
 impl Default for Interaction {
@@ -27,11 +29,11 @@ impl Interaction {
         }
     }
 
-    pub fn poll(&self, twitch: &crate::twitch::Twitch) -> anyhow::Result<()> {
+    pub fn poll(&self, twitch: &Twitch) -> anyhow::Result<()> {
         twitch.poll(&self.sender_rx, &self.receiver_tx)
     }
 
-    pub fn try_read(&self) -> Option<crate::twitch::Message> {
+    pub fn try_read(&self) -> Option<Message> {
         self.receiver_rx.try_recv().ok()
     }
 

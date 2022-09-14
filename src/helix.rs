@@ -1,17 +1,9 @@
-use std::{
-    collections::{BTreeMap, HashMap},
-    path::{Path, PathBuf},
-    sync::Arc,
-};
-
-use anyhow::Context;
-use egui_extras::RetainedImage;
-use uuid::Uuid;
+use std::{collections::HashMap, sync::Arc};
 
 #[derive(Debug, Default)]
 pub struct Chatters {
     pub count: usize,
-    pub chatters: BTreeMap<Kind, Vec<String>>,
+    pub chatters: Vec<(Kind, String)>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -206,15 +198,10 @@ impl Client {
             .chain(chatters.global_mods.into_iter().zip(repeat(GlobalMod)))
             .chain(chatters.moderators.into_iter().zip(repeat(Moderator)))
             .chain(chatters.staff.into_iter().zip(repeat(Staff)))
-            .chain(chatters.viewers.into_iter().zip(repeat(Viewer)))
             .chain(chatters.vips.into_iter().zip(repeat(Vip)))
-            .fold(
-                <BTreeMap<Kind, Vec<String>>>::new(),
-                |mut map, (name, kind)| {
-                    map.entry(kind).or_default().push(name);
-                    map
-                },
-            );
+            .chain(chatters.viewers.into_iter().zip(repeat(Viewer)))
+            .map(|(name, kind)| (kind, name))
+            .collect();
 
         Ok(self::Chatters { count, chatters })
     }
@@ -255,141 +242,4 @@ pub struct Versions {
     pub image_url_1x: String,
     pub image_url_2x: String,
     pub image_url_4x: String,
-}
-
-pub struct CachedImages {
-    agent: ureq::Agent,
-    pub map: HashMap<Uuid, Arc<RetainedImage>>,
-    pub id_map: HashMap<Kind, Uuid>,
-    pub emote_map: HashMap<usize, Uuid>,
-}
-
-impl Default for CachedImages {
-    fn default() -> Self {
-        Self {
-            agent: ureq::agent(),
-            map: Default::default(),
-            id_map: Default::default(),
-            emote_map: Default::default(),
-        }
-    }
-}
-
-impl CachedImages {
-    pub fn load_from(path: impl AsRef<Path>) -> Self {
-        let map = std::fs::read_dir(path)
-            .ok()
-            .into_iter()
-            .flat_map(|dir| {
-                dir.into_iter()
-                    .flatten()
-                    .filter_map(|c| c.file_type().ok().filter(|c| c.is_file()).map(|_| c.path()))
-                    .map(|path| {
-                        let id = path.file_stem().unwrap().to_string_lossy();
-                        let id = uuid::Uuid::parse_str(&id).unwrap();
-
-                        let data = RetainedImage::from_image_bytes(
-                            id.to_string(),
-                            &*std::fs::read(&path).unwrap(),
-                        )
-                        .map(Arc::new)
-                        .unwrap();
-
-                        (id, data)
-                    })
-            })
-            .collect();
-
-        Self {
-            map,
-            agent: ureq::agent(),
-            id_map: HashMap::new(),
-            emote_map: HashMap::new(),
-        }
-    }
-
-    pub fn merge_emotes(&mut self, iter: impl IntoIterator<Item = (usize, Uuid)>) {
-        self.emote_map.extend(iter)
-    }
-
-    pub fn merge_badges(&mut self, badges: &[Badges]) {
-        let (tx, rx) = flume::unbounded();
-        let (kind_tx, kind_rx) = flume::unbounded();
-
-        for badges in badges.chunks(6) {
-            let tx = tx.clone();
-            std::thread::scope(|s| {
-                for (url, kind) in badges
-                    .iter()
-                    .flat_map(|badge| {
-                        badge
-                            .versions
-                            .iter()
-                            .zip(std::iter::repeat(Kind::parse(&badge.set_id)))
-                    })
-                    .map(|(v, kind)| (&v.image_url_4x, kind))
-                {
-                    if let Some(uuid) = Self::extract_uuid(url) {
-                        if let Some(kind) = kind {
-                            let _ = kind_tx.send((kind, uuid));
-                        }
-                        if self.map.contains_key(&uuid) {
-                            continue;
-                        }
-                    }
-
-                    s.spawn(|| {
-                        if let Ok(res) = self.fetch(url) {
-                            let _ = tx.send(res);
-                        }
-                    });
-                }
-            });
-        }
-
-        drop(tx);
-        drop(kind_tx);
-        for (uuid, img) in rx {
-            let _ = self.map.insert(uuid, img);
-        }
-        for (kind, uuid) in kind_rx {
-            let _ = self.id_map.insert(kind, uuid);
-        }
-    }
-
-    fn fetch(&self, url: &str) -> anyhow::Result<(Uuid, Arc<RetainedImage>)> {
-        let uuid = Self::extract_uuid(url).with_context(|| "invalid url")?;
-
-        eprintln!("fetching: {url}");
-
-        let mut buf = Vec::with_capacity(32 * 3);
-        let n = self
-            .agent
-            .get(url)
-            .call()?
-            .into_reader()
-            .read_to_end(&mut buf)?;
-
-        let data = &buf[..n];
-        let img = RetainedImage::from_image_bytes(uuid.to_string(), data)
-            .map_err(|err| anyhow::anyhow!("load image: {err}"))?;
-
-        std::fs::write(PathBuf::from("./data").join(uuid.to_string()), data)?;
-
-        Ok((uuid, Arc::new(img)))
-    }
-
-    fn extract_uuid(input: &str) -> Option<uuid::Uuid> {
-        static PATTERN: once_cell::sync::Lazy<regex::Regex> = once_cell::sync::Lazy::new(|| {
-            const PATTERN: &str =
-                r#"^.*?(?P<uuid>[A-Fa-f0-9]{8}-(?:[A-Fa-f0-9]{4}-){3}[A-Fa-f0-9]{12}).*?$"#;
-            regex::Regex::new(PATTERN).unwrap()
-        });
-
-        PATTERN.captures(input)?.name("uuid")?.as_str().parse().ok()
-    }
-
-    pub fn get(&mut self, id: uuid::Uuid) -> Option<Arc<RetainedImage>> {
-        self.map.get(&id).map(Arc::clone)
-    }
 }

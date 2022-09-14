@@ -21,3 +21,12 @@ impl Default for StartState {
         }
     }
 }
+
+impl StartState {
+    pub fn new(kappas: Vec<egui_extras::RetainedImage>) -> Self {
+        Self {
+            kappas,
+            ..Default::default()
+        }
+    }
+}

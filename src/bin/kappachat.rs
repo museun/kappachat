@@ -86,11 +86,7 @@ fn main() -> anyhow::Result<()> {
                 }
             });
 
-            let mut state = AppState::new(cc.egui_ctx.clone(), kappas, state, helix);
-            state.state.chat_view_state.add_channel(0, "#museun");
-            state.runtime.chatters_update.subscribe(0, "museun");
-
-            state.state.chat_view_state.add_channel(1, "#testing");
+            let state = AppState::new(cc.egui_ctx.clone(), kappas, state, helix);
 
             Box::new(kappachat::App::new(cc.egui_ctx.clone(), state))
         }),

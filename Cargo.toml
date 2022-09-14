@@ -23,12 +23,8 @@ serde_yaml       = "0.9.12"
 simple_env_load  = "0.2.0"
 time             = { version = "0.3.14", features = ["parsing", "formatting", "macros", "local-offset", "serde", "serde-well-known"] }
 ureq             = { version = "2.5.0", features = ["json"] }
-
-# what is this used for?
 uuid             = { version = "1.1.2", features = ["v4", "serde"] }
-# what is this used for?
 once_cell        = "1.14.0"
-# what is this used for?
 regex            = "1.6.0"
 
 

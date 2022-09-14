@@ -1,8 +1,16 @@
 mod start;
-pub use start::{StartState, StartView};
+pub use start::StartView;
 
 mod main;
-pub use main::{ChatViewState, MainView, MainViewState, MainViewView};
+pub use main::{Main, MainView};
 
-pub mod settings;
-pub use settings::{ActiveSettingsView, SettingsState, SettingsView};
+mod settings;
+pub use settings::{ActiveSettingsView, SettingsView};
+
+pub mod state {
+    pub use super::main::{ChatViewState, MainViewState};
+    pub use super::settings::{
+        KeybindingsState, SettingsState, TwitchChannelsState, TwitchSettingsState,
+    };
+    pub use super::start::StartState;
+}
