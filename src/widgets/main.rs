@@ -143,7 +143,7 @@ impl<'a> MainView<'a> {
             }
 
             MainViewView::Foo => {
-                ChatView::new(&mut self.app).display(ui);
+                ChatView::new(&mut self.app.state).display(ui);
             }
 
             MainViewView::Main => {
@@ -209,13 +209,13 @@ pub(super) type Index = usize;
 pub(super) type RoomId = usize;
 
 #[derive(Default)]
-pub struct ChannelState {
+pub struct TabState {
     edit_buffers: HashMap<RoomId, EditBuffer>,
     history: HashMap<RoomId, Queue<Line>>,
     chatters: HashMap<RoomId, (bool, Chatters)>,
 }
 
-impl ChannelState {
+impl TabState {
     fn add(&mut self, id: RoomId) -> bool {
         match self.edit_buffers.entry(id) {
             Entry::Occupied(..) => return false,
@@ -238,7 +238,7 @@ impl ChannelState {
 #[derive(Default)]
 pub struct ChatViewState {
     map: HashMap<RoomId, String>,
-    state: ChannelState,
+    state: TabState,
     channels: Vec<RoomId>,
     active: Index,
     tab_bar_hidden: bool,
@@ -254,6 +254,13 @@ impl ChatViewState {
             return;
         }
         self.active = index;
+    }
+
+    pub fn current_chatters(&self) -> Option<(bool, &Chatters)> {
+        self.state
+            .chatters
+            .get(&self.active()?)
+            .map(|(show, chatters)| (*show, chatters))
     }
 
     pub fn next(&mut self) {
@@ -341,16 +348,16 @@ impl<'a> TabView<'a> {
 }
 
 struct ChatView<'a> {
-    state: &'a mut AppState,
+    state: &'a mut State,
 }
 
 impl<'a> ChatView<'a> {
-    fn new(state: &'a mut AppState) -> Self {
+    fn new(state: &'a mut State) -> Self {
         Self { state }
     }
 
     fn display(self, ui: &mut egui::Ui) {
-        let cvs = &mut self.state.state.chat_view_state;
+        let cvs = &mut self.state.chat_view_state;
         let active = match cvs.active() {
             Some(active) => active,
             None => return,
@@ -378,14 +385,15 @@ impl<'a> ChatView<'a> {
                 });
         }
 
-        let (show, chatters) = &self.state.state.chat_view_state.state.chatters[&active];
-        if *show {
-            SidePanel::right("user_list")
-                // .resizable(false)
-                .frame(egui::Frame::none().fill(ui.style().visuals.faint_bg_color))
-                .show_inside(ui, |ui| {
-                    UserList::new(chatters, &self.state.state).display(ui);
-                });
+        if let Some((show, chatters)) = self.state.chat_view_state.current_chatters() {
+            if show {
+                SidePanel::right("user_list")
+                    // .resizable(false)
+                    .frame(egui::Frame::none().fill(ui.style().visuals.faint_bg_color))
+                    .show_inside(ui, |ui| {
+                        UserList::new(chatters, &self.state).display(ui);
+                    });
+            }
         }
     }
 }

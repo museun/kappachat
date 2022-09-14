@@ -60,3 +60,6 @@ pub use task_queue::TaskQueue;
 
 mod fetch;
 pub use fetch::{FetchQueue, FetchUrl, TwitchImage};
+
+mod image_cache;
+pub use image_cache::ImageCache;

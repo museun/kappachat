@@ -36,21 +36,21 @@ impl ViewState {
 #[derive(Default)]
 pub struct State {
     pub config: EnvConfig,
-    pub channels: Vec<Channel>,
-    pub settings: SettingsState,
-    pub pixels_per_point: f32,
     pub key_mapping: KeyMapping,
+    pub pixels_per_point: f32,
+
+    pub channels: Vec<Channel>,
+
+    pub settings: SettingsState,
     pub twitch_channels: TwitchChannelsState,
     pub twitch_settings: TwitchSettingsState,
     pub keybind_state: KeybindingsState,
     pub start_state: StartState,
     pub chat_view_state: ChatViewState,
-
     pub view_state: ViewState,
-
     pub main_view: MainViewState,
-    pub messages: Queue<twitch::Message>,
 
+    pub messages: Queue<twitch::Message>,
     pub spanned_lines: HashMap<uuid::Uuid, Vec<EmoteSpan>>,
 
     pub emote_map: HashMap<String, String>,
