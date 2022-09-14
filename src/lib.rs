@@ -1,8 +1,12 @@
 #![cfg_attr(debug_assertions, allow(dead_code, unused_variables,))]
 
+// TODO log view
+
 use egui::Color32;
 
 pub const TWITCH_COLOR: Color32 = Color32::from_rgb(146, 86, 237);
+pub const SETTINGS_KEY: &str = "kappa_chat_settings";
+pub const APP_NAME: &str = "KappaChat";
 
 pub trait RequestPaint: Send + Sync {
     fn request_repaint(&self) {}
@@ -50,8 +54,6 @@ pub use channel::Channel;
 
 pub mod app;
 pub use app::App;
-
-pub const SETTINGS_KEY: &str = "kappa_chat_settings";
 
 mod task_queue;
 pub use task_queue::TaskQueue;

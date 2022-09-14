@@ -2,12 +2,13 @@ use std::collections::{hash_map::Entry, HashMap, HashSet};
 
 use egui::{
     collapsing_header::CollapsingState, vec2, Label, RichText, ScrollArea, Sense, SidePanel,
-    TextEdit, TextStyle, TopBottomPanel, Window,
+    TextEdit, TextStyle, TopBottomPanel,
 };
+use egui_extras::RetainedImage;
 
 use crate::{
     helix::{Chatters, Kind},
-    state::AppState,
+    state::{AppState, State},
     twitch::EmoteSpan,
     Queue,
 };
@@ -146,19 +147,6 @@ impl<'a> MainView<'a> {
             }
 
             MainViewView::Main => {
-                Window::new("emotes").show(ui.ctx(), |ui| {
-                    ScrollArea::vertical()
-                        .auto_shrink([false, false])
-                        .show(ui, |ui| {
-                            for (id, image) in &self.app.state.images {
-                                ui.horizontal(|ui| {
-                                    ui.label(id);
-                                    image.show_size(ui, vec2(24.0, 24.0))
-                                });
-                            }
-                        });
-                });
-
                 ui.scope(|ui| {
                     let width = ui
                         .fonts()
@@ -217,15 +205,18 @@ pub enum Line {
     Chat { id: uuid::Uuid },
 }
 
+pub(super) type Index = usize;
+pub(super) type RoomId = usize;
+
 #[derive(Default)]
 pub struct ChannelState {
-    edit_buffers: HashMap<usize, EditBuffer>,
-    history: HashMap<usize, Queue<Line>>,
-    chatters: HashMap<usize, (bool, Chatters)>,
+    edit_buffers: HashMap<RoomId, EditBuffer>,
+    history: HashMap<RoomId, Queue<Line>>,
+    chatters: HashMap<RoomId, (bool, Chatters)>,
 }
 
 impl ChannelState {
-    fn add(&mut self, id: usize) -> bool {
+    fn add(&mut self, id: RoomId) -> bool {
         match self.edit_buffers.entry(id) {
             Entry::Occupied(..) => return false,
             Entry::Vacant(e) => {
@@ -237,7 +228,7 @@ impl ChannelState {
         true
     }
 
-    fn remove(&mut self, id: usize) {
+    fn remove(&mut self, id: RoomId) {
         self.edit_buffers.remove(&id);
         self.history.remove(&id);
         self.chatters.remove(&id);
@@ -246,19 +237,19 @@ impl ChannelState {
 
 #[derive(Default)]
 pub struct ChatViewState {
-    map: HashMap<usize, String>,
+    map: HashMap<RoomId, String>,
     state: ChannelState,
-    channels: Vec<usize>,
-    active: usize,
+    channels: Vec<Index>,
+    active: Index,
     tab_bar_hidden: bool,
 }
 
 impl ChatViewState {
-    pub fn active(&self) -> usize {
+    pub fn active(&self) -> Index {
         self.active
     }
 
-    pub fn set_active(&mut self, index: usize) {
+    pub fn set_active(&mut self, index: Index) {
         if index >= self.channels.len() {
             return;
         }
@@ -277,22 +268,25 @@ impl ChatViewState {
             return;
         }
 
-        self.active = if self.active == 0 {
-            self.channels.len() - 1
-        } else {
-            self.active - 1
-        }
+        self.active = (self.active == 0)
+            .then_some(self.channels.len())
+            .unwrap_or(self.active)
+            - 1;
     }
 
     pub fn toggle_tab_bar(&mut self) {
         self.tab_bar_hidden = !self.tab_bar_hidden;
     }
 
-    pub fn chatters_mut(&mut self, id: usize) -> Option<&mut (bool, Chatters)> {
+    pub fn name(&self, id: RoomId) -> Option<&str> {
+        self.map.get(&id).map(|c| &**c)
+    }
+
+    pub fn chatters_mut(&mut self, id: RoomId) -> Option<&mut (bool, Chatters)> {
         self.state.chatters.get_mut(&id)
     }
 
-    pub fn add_channel(&mut self, id: usize, name: impl ToString) {
+    pub fn add_channel(&mut self, id: RoomId, name: impl ToString) {
         if !self.state.add(id) {
             return;
         }
@@ -301,7 +295,7 @@ impl ChatViewState {
         self.channels.push(id);
     }
 
-    pub fn remove_channel_id(&mut self, id: usize) -> bool {
+    pub fn remove_channel_id(&mut self, id: RoomId) -> bool {
         if self.map.remove(&id).is_none() {
             return false;
         }
@@ -310,6 +304,10 @@ impl ChatViewState {
         self.channels.retain(|&c| c != id);
 
         true
+    }
+
+    pub fn channels(&self) -> impl Iterator<Item = (RoomId, &str)> {
+        self.map.iter().map(|(k, v)| (*k, &**v))
     }
 }
 
@@ -377,13 +375,13 @@ impl<'a> ChatView<'a> {
                 });
         }
 
-        let (show, chatters) = &cvs.state.chatters[&active];
+        let (show, chatters) = &self.state.state.chat_view_state.state.chatters[&active];
         if *show {
             SidePanel::right("user_list")
                 // .resizable(false)
                 .frame(egui::Frame::none().fill(ui.style().visuals.faint_bg_color))
                 .show_inside(ui, |ui| {
-                    UserList::new(chatters).display(ui);
+                    UserList::new(chatters, &self.state.state).display(ui);
                 });
         }
     }
@@ -391,11 +389,18 @@ impl<'a> ChatView<'a> {
 
 struct UserList<'a> {
     chatters: &'a Chatters,
+    state: &'a State,
 }
 
 impl<'a> UserList<'a> {
-    fn new(chatters: &'a Chatters) -> Self {
-        Self { chatters }
+    fn new(chatters: &'a Chatters, state: &'a State) -> Self {
+        Self { chatters, state }
+    }
+
+    fn get_image(&self, kind: Kind) -> Option<&RetainedImage> {
+        self.state
+            .images
+            .get(&kind.as_str()[..kind.as_str().len() - 1])
     }
 
     fn display(self, ui: &mut egui::Ui) {
@@ -410,22 +415,25 @@ impl<'a> UserList<'a> {
                 );
 
                 let header = ui
-                    .horizontal(|ui| {
-                        // if let Some(id) = self.cached_images.id_map.get(kind) {
-                        //     if let Some(img) = self.cached_images.map.get(id) {
-                        //         img.show_size(ui, vec2(8.0, 8.0));
-                        //     }
-                        // }
+                    .scope(|ui| {
+                        ui.spacing_mut().item_spacing.x = 1.0;
 
-                        ui.add(
-                            Label::new(
-                                RichText::new(kind.as_str())
-                                    .color(ui.style().visuals.strong_text_color())
-                                    .small(),
+                        ui.horizontal(|ui| {
+                            if let Some(img) = self.get_image(*kind) {
+                                img.show_size(ui, vec2(8.0, 8.0));
+                            }
+
+                            ui.add(
+                                Label::new(
+                                    RichText::new(kind.as_str())
+                                        .color(ui.style().visuals.strong_text_color())
+                                        .small(),
+                                )
+                                .wrap(false)
+                                .sense(Sense::click()),
                             )
-                            .wrap(false)
-                            .sense(Sense::click()),
-                        )
+                        })
+                        .inner
                     })
                     .inner;
 

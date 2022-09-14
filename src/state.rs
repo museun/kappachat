@@ -3,10 +3,12 @@ use std::{
     hash::{Hash, Hasher},
 };
 
+use eframe::epaint::ahash::HashSet;
 use egui_extras::RetainedImage;
+use uuid::Uuid;
 
 use crate::{
-    helix,
+    helix::{self},
     twitch::{self, EmoteSpan},
     widgets::{
         settings::KeybindingsState, settings::TwitchChannelsState, settings::TwitchSettingsState,
@@ -51,7 +53,35 @@ pub struct State {
     pub spanned_lines: HashMap<uuid::Uuid, Vec<EmoteSpan>>,
 
     pub emote_map: HashMap<String, String>,
-    pub images: HashMap<String, RetainedImage>,
+    pub images: ImageCache,
+    pub requested_images: HashSet<Uuid>,
+
+    pub show_image_map: bool,
+}
+
+#[derive(Default)]
+pub struct ImageCache {
+    pub map: HashMap<Uuid, RetainedImage>,
+    pub lookup: HashMap<String, Uuid>,
+}
+
+impl ImageCache {
+    pub fn get(&self, key: &str) -> Option<&RetainedImage> {
+        self.map.get(self.lookup.get(key)?)
+    }
+
+    pub fn has(&self, key: &str) -> bool {
+        self.lookup.contains_key(key)
+    }
+
+    pub fn has_id(&self, id: Uuid) -> bool {
+        self.map.contains_key(&id)
+    }
+
+    pub fn add(&mut self, name: impl ToString, id: Uuid, image: RetainedImage) {
+        self.map.insert(id, image);
+        self.lookup.insert(name.to_string(), id);
+    }
 }
 
 impl State {
@@ -66,6 +96,8 @@ impl State {
 pub struct Runtime {
     pub helix: poll_promise::Promise<helix::Client>,
     pub fetch: FetchQueue<TwitchImage>,
+    pub global_badges: poll_promise::Promise<Vec<helix::Badges>>,
+    pub helix_ready: flume::Sender<helix::Client>,
 }
 
 pub struct AppState {
@@ -131,6 +163,8 @@ impl AppState {
         persist: PersistState,
         helix: poll_promise::Promise<helix::Client>,
     ) -> Self {
+        let (tx, rx) = flume::bounded(0);
+
         Self {
             state: State {
                 pixels_per_point: persist.pixels_per_point,
@@ -146,6 +180,13 @@ impl AppState {
             runtime: Runtime {
                 helix,
                 fetch: FetchQueue::new(repaint),
+                helix_ready: tx,
+                global_badges: poll_promise::Promise::spawn_thread("global_badges", {
+                    move || {
+                        let helix = rx.recv().unwrap();
+                        helix.get_badges().expect("get global badges")
+                    }
+                }),
             },
             twitch: Default::default(),
             identity: Default::default(),

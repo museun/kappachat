@@ -1,7 +1,9 @@
+use std::collections::BTreeMap;
+
+use egui::{vec2, Grid, ScrollArea, Window};
 use egui_extras::RetainedImage;
 
 use crate::{
-    helix,
     state::{AppState, BorrowedPersistState},
     widgets::{MainView, MainViewView},
     TwitchImage, SETTINGS_KEY,
@@ -13,12 +15,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(context: egui::Context, mut state: AppState) -> Self {
-        state.state.chat_view_state.add_channel(0, "#museun");
-        state.state.chat_view_state.add_channel(1, "#testing");
-        state.state.chat_view_state.chatters_mut(0).unwrap().1 =
-            helix::Client::chatters_json(include_str!("../chatters.json")).unwrap();
-
+    pub fn new(context: egui::Context, state: AppState) -> Self {
         Self {
             context,
             app: state,
@@ -34,8 +31,9 @@ impl App {
     }
 
     fn toggle_user_list(&mut self) {
-        let active = self.app.state.chat_view_state.active();
-        if let Some((visible, _)) = self.app.state.chat_view_state.chatters_mut(active).as_mut() {
+        let cvs = &mut self.app.state.chat_view_state;
+        let active = cvs.active();
+        if let Some((visible, _)) = cvs.chatters_mut(active).as_mut() {
             *visible = !*visible;
         }
     }
@@ -68,10 +66,64 @@ impl App {
     }
 
     fn switch_to_main(&mut self) {
-        self.app
-            .state
-            .view_state
-            .switch_to_view(self.app.state.view_state.previous_view)
+        let vs = &mut self.app.state.view_state;
+        vs.switch_to_view(vs.previous_view)
+    }
+
+    fn try_fetch_chatters(&mut self) {}
+
+    fn try_fetch_badges(&mut self) {
+        const DESIRED_USER_LIST_BADGES: [&str; 8] = [
+            "broadcaster",
+            "vip",
+            "moderator",
+            "staff",
+            "admin",
+            "global_mod",
+            "no_audio",
+            "no_video",
+        ];
+
+        // if we have all of the desired badges already, do nothing
+        if DESIRED_USER_LIST_BADGES
+            .into_iter()
+            .fold(true, |ok, key| ok & self.app.state.images.has(key))
+        {
+            return;
+        }
+
+        let badges = match self.app.runtime.global_badges.ready() {
+            Some(badges) => badges,
+            None => {
+                let helix = match self.app.runtime.helix.ready() {
+                    Some(helix) => helix,
+                    None => return,
+                };
+
+                let _ = self.app.runtime.helix_ready.send(helix.clone());
+                return;
+            }
+        };
+
+        for (set_id, (id, url)) in badges.iter().flat_map(|badge| {
+            std::iter::repeat(&badge.set_id)
+                .zip(badge.versions.iter().map(|v| (&v.id, &v.image_url_4x)))
+        }) {
+            if !DESIRED_USER_LIST_BADGES.contains(&&**set_id) {
+                continue;
+            }
+
+            let badge = TwitchImage::badge(id, &set_id, url);
+            if self.app.state.images.has_id(badge.id()) {
+                continue;
+            }
+
+            if !self.app.state.requested_images.insert(badge.id()) {
+                continue;
+            }
+
+            self.app.runtime.fetch.fetch(badge);
+        }
     }
 
     fn try_fetch_image(&mut self) {
@@ -80,13 +132,15 @@ impl App {
             _ => return,
         };
 
-        if self.app.state.images.contains_key(image.id()) {
+        let images = &mut self.app.state.images;
+        if images.has_id(image.id()) {
             return;
         }
 
         match RetainedImage::from_image_bytes(image.name(), &data) {
             Ok(data) => {
-                self.app.state.images.insert(image.id().to_string(), data);
+                images.add(image.name(), image.id(), data);
+                let _ = self.app.state.requested_images.remove(&image.id());
             }
             Err(err) => {
                 eprintln!("cannot create ({}) {} : {err}", image.id(), image.name())
@@ -119,7 +173,7 @@ impl App {
             self.app.state.spanned_lines.insert(id, spans); // TODO this should be bounded
 
             for (emote, _) in pm.emotes() {
-                if self.app.state.images.contains_key(emote) {
+                if self.app.state.images.has(emote) {
                     continue;
                 }
 
@@ -135,11 +189,8 @@ impl App {
                 let url =
                     format!("https://static-cdn.jtvnw.net/emoticons/v2/{emote}/static/dark/3.0");
 
-                self.app.runtime.fetch.fetch(TwitchImage::Emote {
-                    id: emote.to_string(),
-                    name: name.to_string(),
-                    url,
-                })
+                let emote = TwitchImage::emote(&emote, &name, url);
+                self.app.runtime.fetch.fetch(emote)
             }
         }
 
@@ -155,6 +206,10 @@ impl App {
             self.context.set_debug_on_hover(
                 !self.context.debug_on_hover(), //
             )
+        }
+
+        if self.context.input().key_pressed(egui::Key::F10) {
+            self.app.state.show_image_map = !self.app.state.show_image_map;
         }
 
         if self.app.state.keybind_state.is_capturing() {
@@ -206,9 +261,43 @@ impl App {
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
         self.try_poll_twitch();
+        self.try_fetch_badges();
         self.try_fetch_image();
         self.try_read_message();
         self.try_handle_key_press();
+
+        Window::new("image cache")
+            .open(&mut self.app.state.show_image_map)
+            .show(&self.context, |ui| {
+                ScrollArea::vertical().show(ui, |ui| {
+                    if !self.app.state.requested_images.is_empty() {
+                        ui.group(|ui| {
+                            ui.label("requested images");
+                            ui.vertical(|ui| {
+                                let mut ids =
+                                    self.app.state.requested_images.iter().collect::<Vec<_>>();
+                                ids.sort();
+
+                                for id in ids {
+                                    ui.monospace(id.to_string());
+                                }
+                            })
+                        });
+                    }
+
+                    Grid::new("image_map").num_columns(3).show(ui, |ui| {
+                        for (id, img) in
+                            self.app.state.images.map.iter().collect::<BTreeMap<_, _>>()
+                        {
+                            img.show_size(ui, vec2(16.0, 16.0));
+                            ui.label(img.debug_name());
+                            ui.monospace(id.to_string());
+                            ui.end_row()
+                        }
+                    });
+                })
+            });
+
         egui::CentralPanel::default().show(ctx, |ui| MainView::new(&mut self.app).display(ui));
     }
 

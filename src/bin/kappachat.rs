@@ -54,19 +54,6 @@ fn load_settings(state: &mut PersistState, storage: &dyn Storage) {
 fn main() -> anyhow::Result<()> {
     simple_env_load::load_env_from([".dev.env", ".secrets.env"]); //".secrets.env"
 
-    // let mut cached = CachedImages::load_from("./data");
-
-    // let json = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", "badges.json"));
-    // #[derive(serde::Deserialize)]
-    // struct Resp<T> {
-    //     data: Vec<T>,
-    // }
-    // let badges = serde_json::from_str::<Resp<helix::Badges>>(json)
-    //     .unwrap()
-    //     .data;
-
-    // cached.merge_badges(&badges);
-
     let kappas = kappas::load_kappas();
 
     let mut state = PersistState {
@@ -76,7 +63,7 @@ fn main() -> anyhow::Result<()> {
     };
 
     eframe::run_native(
-        "KappaChat",
+        kappachat::APP_NAME,
         NativeOptions::default(),
         Box::new(move |cc| {
             if let Some(storage) = cc.storage {
@@ -88,15 +75,25 @@ fn main() -> anyhow::Result<()> {
             let helix = poll_promise::Promise::spawn_thread("helix_initialization", {
                 let config = state.env_config.clone();
                 move || {
-                    helix::Client::fetch_oauth(
+                    eprintln!("getting helix");
+                    let helix = helix::Client::fetch_oauth(
                         &config.twitch_client_id,
                         &config.twitch_client_secret,
                     )
-                    .expect("fetch")
+                    .expect("fetch");
+                    eprintln!("got helix");
+                    helix
                 }
             });
 
-            let state = AppState::new(cc.egui_ctx.clone(), kappas, state, helix);
+            let mut state = AppState::new(cc.egui_ctx.clone(), kappas, state, helix);
+            state.state.chat_view_state.add_channel(0, "#museun");
+            state.state.chat_view_state.add_channel(1, "#testing");
+            state.state.chat_view_state.chatters_mut(0).unwrap().1 = helix::Client::chatters_json(
+                include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/chatters.json")),
+            )
+            .unwrap();
+
             Box::new(kappachat::App::new(cc.egui_ctx.clone(), state))
         }),
     );

@@ -95,15 +95,16 @@ impl OAuth {
     }
 }
 
+#[derive(Clone)]
 pub struct Client {
-    oauth: OAuth,
+    oauth: Arc<OAuth>,
     agent: ureq::Agent,
 }
 
 impl Client {
     pub fn fetch_oauth(client_id: &str, client_secret: &str) -> anyhow::Result<Self> {
         let agent = ureq::agent();
-        let oauth = OAuth::create(agent.clone(), client_id, client_secret)?;
+        let oauth = OAuth::create(agent.clone(), client_id, client_secret).map(Arc::new)?;
         Ok(Self { oauth, agent })
     }
 
