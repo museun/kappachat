@@ -13,11 +13,8 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(context: egui::Context, state: AppState) -> Self {
-        Self {
-            context,
-            app: state,
-        }
+    pub const fn new(context: egui::Context, app: AppState) -> Self {
+        Self { context, app }
     }
 
     const fn is_connected(&self) -> bool {

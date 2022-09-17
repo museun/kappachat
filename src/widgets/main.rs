@@ -2,9 +2,8 @@ use std::collections::{HashMap, HashSet};
 
 use eframe::epaint::Pos2;
 use egui::{
-    pos2, vec2, CentralPanel, Color32, Direction, Frame, Id, Label, Layout, PointerButton, Rect,
-    Response, RichText, Rounding, ScrollArea, Sense, SidePanel, Stroke, TextEdit, TextStyle,
-    TopBottomPanel, Vec2,
+    pos2, vec2, CentralPanel, Color32, Frame, Id, Label, PointerButton, Rect, Response, RichText,
+    Rounding, ScrollArea, Sense, SidePanel, Stroke, TextEdit, TextStyle, TopBottomPanel, Vec2,
 };
 use egui_extras::RetainedImage;
 use time::{format_description::FormatItem, macros::format_description, OffsetDateTime};
@@ -12,7 +11,7 @@ use time::{format_description::FormatItem, macros::format_description, OffsetDat
 use crate::{
     fetch::ImageKind,
     helix::{Chatters, Kind},
-    state::{AppState, State},
+    state::AppState,
     store::Image,
     twitch::{self, EmoteSpan},
     Channel, FetchQueue, ImageCache, Queue,
@@ -62,7 +61,7 @@ impl<'a> Main<'a> {
 
     fn display_main(&mut self, ctx: &egui::Context) {
         let writer = self.state.writer.clone();
-        ChatView::new(&mut self.state, writer).display(ctx);
+        ChatView::new(self.state, writer).display(ctx);
     }
 
     fn display_settings(&mut self, ui: &mut egui::Ui) {
@@ -114,7 +113,7 @@ struct ChatLineView<'a> {
 }
 
 impl<'a> ChatLineView<'a> {
-    fn new(
+    const fn new(
         line: &'a ChatLine,
         cache: &'a ImageCache,
         emote_map: &'a HashMap<String, String>,
@@ -289,7 +288,7 @@ impl Default for ChatViewState {
 }
 
 impl ChatViewState {
-    pub fn active_index(&self) -> Option<usize> {
+    pub const fn active_index(&self) -> Option<usize> {
         self.active
     }
 
@@ -399,10 +398,10 @@ impl Position {
 
     fn rect(&self, size: f32, max: Vec2) -> Rect {
         match self {
-            Position::Top => Rect::from_min_size(pos2(0.0, 0.0), max),
-            Position::Bottom => Rect::from_min_size(pos2(0.0, max.y), max),
-            Position::Left => Rect::from_min_size(pos2(0.0, 0.0), max),
-            Position::Right => Rect::from_min_size(pos2(max.x, 0.0), max),
+            Self::Top => Rect::from_min_size(pos2(0.0, 0.0), max),
+            Self::Bottom => Rect::from_min_size(pos2(0.0, max.y), max),
+            Self::Left => Rect::from_min_size(pos2(0.0, 0.0), max),
+            Self::Right => Rect::from_min_size(pos2(max.x, 0.0), max),
         }
     }
 
@@ -421,28 +420,28 @@ impl Position {
         ]
     }
 
-    fn as_side(&self) -> Option<egui::panel::Side> {
+    const fn as_side(&self) -> Option<egui::panel::Side> {
         Some(match self {
-            Position::Right => egui::panel::Side::Right,
-            Position::Left => egui::panel::Side::Left,
+            Self::Right => egui::panel::Side::Right,
+            Self::Left => egui::panel::Side::Left,
             _ => return None,
         })
     }
 
-    fn as_top_bottom(&self) -> Option<egui::panel::TopBottomSide> {
+    const fn as_top_bottom(&self) -> Option<egui::panel::TopBottomSide> {
         Some(match self {
-            Position::Bottom => egui::panel::TopBottomSide::Bottom,
-            Position::Top => egui::panel::TopBottomSide::Top,
+            Self::Bottom => egui::panel::TopBottomSide::Bottom,
+            Self::Top => egui::panel::TopBottomSide::Top,
             _ => return None,
         })
     }
 
     const fn as_str(&self) -> &'static str {
         match self {
-            Position::Top => "Top",
-            Position::Right => "Right",
-            Position::Bottom => "Bottom",
-            Position::Left => "Left",
+            Self::Top => "Top",
+            Self::Right => "Right",
+            Self::Bottom => "Bottom",
+            Self::Left => "Left",
         }
     }
 }
@@ -882,7 +881,7 @@ struct UserList<'a> {
 }
 
 impl<'a> UserList<'a> {
-    fn new(chatters: &'a Chatters, images: &'a ImageCache) -> Self {
+    const fn new(chatters: &'a Chatters, images: &'a ImageCache) -> Self {
         Self { chatters, images }
     }
 
