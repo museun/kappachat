@@ -25,12 +25,20 @@ fn load_settings(state: &mut PersistState, storage: &dyn Storage) {
         None => return,
     };
 
-    state.pixels_per_point = deser.pixels_per_point;
-    state.channels = deser.channels;
-    state.key_mapping = deser.key_mapping;
-    state.tab_bar_image_size = deser.tab_bar_image_size;
-    state.tab_bar_position = deser.tab_bar_position;
-    state.show_image_mask = deser.show_image_mask;
+    macro_rules! merge {
+        ($($binding:tt)*) => {
+            $( { state.$binding = deser.$binding } )*
+        };
+    }
+
+    merge! {
+        pixels_per_point
+        channels
+        key_mapping
+        tab_bar_image_size
+        tab_bar_position
+        show_image_mask
+    }
 
     type Extract = for<'e> fn(&'e mut EnvConfig) -> &'e mut String;
 
@@ -97,7 +105,6 @@ fn main() -> anyhow::Result<()> {
             });
 
             let state = AppState::new(cc.egui_ctx.clone(), kappas, state, helix, dark_image_mask);
-
             Box::new(kappachat::App::new(cc.egui_ctx.clone(), state))
         }),
     );
