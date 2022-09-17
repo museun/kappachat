@@ -114,12 +114,12 @@ where
                 continue;
             }
 
-            eprintln!("sending req for {}", item.id());
+            log::trace!("sending req for {}", item.id());
 
             let mut body = match fetch(&agent, item.url()) {
                 Ok(body) => body,
                 _ => {
-                    eprintln!("cannot fetch: {item:?}");
+                    log::error!("cannot fetch: {item:?}");
                     continue;
                 }
             };
@@ -131,6 +131,6 @@ where
             repaint.request_repaint();
         }
 
-        eprintln!("end of fetch loop")
+        log::warn!("end of fetch loop");
     }
 }

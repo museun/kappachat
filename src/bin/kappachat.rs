@@ -66,6 +66,7 @@ fn load_settings(state: &mut PersistState, storage: &dyn Storage) {
 
 fn main() -> anyhow::Result<()> {
     simple_env_load::load_env_from([".dev.env", ".secrets.env"]); //".secrets.env"
+    let recv = kappachat::init_logger();
 
     let kappas = kappas::load_kappas();
 
@@ -93,19 +94,19 @@ fn main() -> anyhow::Result<()> {
             let helix = poll_promise::Promise::spawn_thread("helix_initialization", {
                 let config = state.env_config.clone();
                 move || {
-                    eprintln!("getting helix");
+                    log::trace!("getting helix");
                     let helix = helix::Client::fetch_oauth(
                         &config.twitch_client_id,
                         &config.twitch_client_secret,
                     )
                     .expect("fetch");
-                    eprintln!("got helix");
+                    log::trace!("got helix");
                     helix
                 }
             });
 
             let state = AppState::new(cc.egui_ctx.clone(), kappas, state, helix, dark_image_mask);
-            Box::new(kappachat::App::new(cc.egui_ctx.clone(), state))
+            Box::new(kappachat::App::new(cc.egui_ctx.clone(), state, recv))
         }),
     );
 

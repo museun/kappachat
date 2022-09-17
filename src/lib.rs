@@ -53,3 +53,42 @@ mod store;
 
 // TODO make a light version of this mask
 pub const DARK_MASK_PNG: &[u8] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/mask.png"));
+
+pub(crate) static FORMAT: &[time::format_description::FormatItem<'static>] =
+    time::macros::format_description!("[hour]:[minute]:[second]");
+
+pub fn format_seconds(mut secs: u64) -> String {
+    const TABLE: [(&str, u64); 4] = [
+        ("days", 86400),
+        ("hours", 3600),
+        ("minutes", 60),
+        ("seconds", 1),
+    ];
+
+    fn pluralize(s: &str, n: u64) -> String {
+        format!("{} {}", n, if n > 1 { s } else { &s[..s.len() - 1] })
+    }
+
+    let mut time = vec![];
+    for (name, d) in &TABLE {
+        let div = secs / d;
+        if div > 0 {
+            time.push(pluralize(name, div));
+            secs -= d * div;
+        }
+    }
+
+    let len = time.len();
+    if len > 1 {
+        if len > 2 {
+            for segment in time.iter_mut().take(len - 2) {
+                segment.push(',')
+            }
+        }
+        time.insert(len - 1, "and".into())
+    }
+    time.join(" ")
+}
+
+mod logger;
+pub use logger::init_logger;

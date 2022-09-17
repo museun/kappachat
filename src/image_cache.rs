@@ -18,7 +18,7 @@ impl ImageCache {
     }
 
     pub fn add(&mut self, id: Uuid, image: RetainedImage) {
-        eprintln!("image cache: adding: {id}");
+        log::debug!("image cache: adding: {id}");
         self.map.insert(id, image);
     }
 }

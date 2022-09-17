@@ -1,20 +1,32 @@
 use egui_extras::RetainedImage;
 
 use crate::{
+    logger,
     state::{AppState, BorrowedPersistState},
     store::{Image, ImageStore},
-    widgets::{Main, MainView},
+    widgets::{LogWindow, Main, MainView},
     Channel, FetchImage, SETTINGS_KEY,
 };
 
 pub struct App {
     context: egui::Context,
     pub app: AppState,
+    log_window: LogWindow,
+    log_recv: flume::Receiver<logger::Record>,
 }
 
 impl App {
-    pub const fn new(context: egui::Context, app: AppState) -> Self {
-        Self { context, app }
+    pub fn new(
+        context: egui::Context,
+        app: AppState,
+        log_recv: flume::Receiver<logger::Record>,
+    ) -> Self {
+        Self {
+            context,
+            app,
+            log_window: LogWindow::default(),
+            log_recv,
+        }
     }
 
     const fn is_connected(&self) -> bool {
@@ -158,7 +170,7 @@ impl App {
                 ImageStore::<Image>::add(&image, &(), &data);
             }
             Err(err) => {
-                eprintln!("cannot create ({}) {} : {err}", image.id, image.url())
+                log::error!("cannot create ({}) {} : {err}", image.id, image.url())
             }
         }
     }
@@ -258,6 +270,12 @@ impl App {
         }
     }
 
+    fn try_read_logs(&mut self) {
+        for record in self.log_recv.try_iter() {
+            self.log_window.push(record)
+        }
+    }
+
     fn try_handle_key_press(&mut self) {
         if self.context.input().events.is_empty() {
             return;
@@ -267,6 +285,10 @@ impl App {
             self.context.set_debug_on_hover(
                 !self.context.debug_on_hover(), //
             )
+        }
+
+        if self.context.input().key_pressed(egui::Key::F9) {
+            self.app.state.show_log_window = !self.app.state.show_log_window;
         }
 
         if self.context.input().key_pressed(egui::Key::F10) {
@@ -289,7 +311,7 @@ impl App {
             if let Some(action) = self.app.state.key_mapping.find(key, modifiers) {
                 use crate::KeyAction::*;
 
-                eprintln!("action: {action:?}");
+                log::trace!("action: {action:?}");
 
                 match action {
                     SwitchToSettings => self.switch_to_settings(),
@@ -331,7 +353,11 @@ impl eframe::App for App {
         self.try_update_images();
         self.try_read_message();
         self.try_handle_user_input();
+        self.try_read_logs();
         self.try_handle_key_press();
+
+        self.log_window
+            .display(&mut self.app.state.show_log_window, ctx);
 
         // Window::new("image cache")
         //     .open(&mut self.app.state.show_image_map)

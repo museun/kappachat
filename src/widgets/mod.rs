@@ -14,3 +14,6 @@ pub mod state {
     };
     pub use super::start::StartState;
 }
+
+mod log_window;
+pub use log_window::LogWindow;

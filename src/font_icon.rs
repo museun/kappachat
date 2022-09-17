@@ -12,3 +12,5 @@ pub const DOWN_TRIANGLE: &str = "⏷";
 
 pub const BALLOT_BOX: &str = "☐";
 pub const BALLOT_BOX_CHECK: &str = "☑";
+
+pub const NUMBER: &str = "№";

@@ -70,6 +70,8 @@ pub struct State {
     pub show_image_map: bool,
 
     pub window_size: Vec2,
+
+    pub show_log_window: bool,
 }
 
 impl State {

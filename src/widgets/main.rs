@@ -6,7 +6,7 @@ use egui::{
     Rounding, ScrollArea, Sense, SidePanel, Stroke, TextEdit, TextStyle, TopBottomPanel, Vec2,
 };
 use egui_extras::RetainedImage;
-use time::{format_description::FormatItem, macros::format_description, OffsetDateTime};
+use time::OffsetDateTime;
 
 use crate::{
     fetch::ImageKind,
@@ -46,6 +46,7 @@ impl<'a> Main<'a> {
         match self.state.state.view_state.current_view {
             MainView::Start => {
                 self.display_main(ctx)
+
                 // CentralPanel::default().show(ctx, |ui| {
                 //     self.display_start(ui);
                 // });
@@ -55,7 +56,12 @@ impl<'a> Main<'a> {
                     self.display_settings(ui);
                 });
             }
-            MainView::Main => self.display_main(ctx),
+            MainView::Main => {
+                // CentralPanel::default().show(ctx, |ui| {
+                //     self.display_start(ui);
+                // });
+                self.display_main(ctx)
+            }
         }
     }
 
@@ -135,7 +141,10 @@ impl<'a> ChatLineView<'a> {
                 ui.small(self.line.ts.as_str())
                     .on_hover_ui_at_pointer(|ui| {
                         let s = OffsetDateTime::now_local().unwrap() - self.line.ts.date_time;
-                        ui.small(format!("{} ago", format_seconds(s.whole_seconds() as _)));
+                        ui.small(format!(
+                            "{} ago",
+                            crate::format_seconds(s.whole_seconds() as _)
+                        ));
                     });
             }
 
@@ -204,41 +213,6 @@ impl ChannelState {
     }
 }
 
-pub fn format_seconds(mut secs: u64) -> String {
-    const TABLE: [(&str, u64); 4] = [
-        ("days", 86400),
-        ("hours", 3600),
-        ("minutes", 60),
-        ("seconds", 1),
-    ];
-
-    fn pluralize(s: &str, n: u64) -> String {
-        format!("{} {}", n, if n > 1 { s } else { &s[..s.len() - 1] })
-    }
-
-    let mut time = vec![];
-    for (name, d) in &TABLE {
-        let div = secs / d;
-        if div > 0 {
-            time.push(pluralize(name, div));
-            secs -= d * div;
-        }
-    }
-
-    let len = time.len();
-    if len > 1 {
-        if len > 2 {
-            for segment in time.iter_mut().take(len - 2) {
-                segment.push(',')
-            }
-        }
-        time.insert(len - 1, "and".into())
-    }
-    time.join(" ")
-}
-
-static FORMAT: &[FormatItem<'static>] = format_description!("[hour]:[minute]:[second]");
-
 #[derive(Clone)]
 pub struct Timestamp {
     pub(crate) date_time: OffsetDateTime, // why?
@@ -247,9 +221,8 @@ pub struct Timestamp {
 
 impl Timestamp {
     pub fn now_local() -> Self {
-        static FORMAT: &[FormatItem<'static>] = format_description!("[hour]:[minute]:[second]");
         let date_time = OffsetDateTime::now_local().expect("valid time");
-        let repr = date_time.format(&FORMAT).expect("valid time");
+        let repr = date_time.format(&crate::FORMAT).expect("valid time");
         Self { date_time, repr }
     }
 
@@ -692,6 +665,7 @@ impl TabBar {
                     .resizable(false)
                     .frame(frame)
                     .height_range(range)
+                    // TODO this style exists: pub scroll_bar_width: f32,
                     .show(ctx, |ui| {
                         ui.horizontal(body);
                     })
@@ -702,6 +676,7 @@ impl TabBar {
                     .resizable(false)
                     .frame(frame)
                     .width_range(range)
+                    // TODO this style exists: pub scroll_bar_width: f32,
                     .show(ctx, |ui| {
                         ui.vertical(body);
                     })
