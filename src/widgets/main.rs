@@ -2,8 +2,9 @@ use std::collections::{HashMap, HashSet};
 
 use eframe::epaint::Pos2;
 use egui::{
-    pos2, vec2, CentralPanel, Color32, Frame, Id, Label, PointerButton, Rect, Response, RichText,
-    Rounding, ScrollArea, Sense, SidePanel, Stroke, TextEdit, TextStyle, TopBottomPanel, Vec2,
+    pos2, vec2, CentralPanel, Color32, CursorIcon, Frame, Id, Label, PointerButton, Rect, Response,
+    RichText, Rounding, ScrollArea, Sense, SidePanel, Stroke, TextEdit, TextStyle, TopBottomPanel,
+    Vec2,
 };
 use egui_extras::RetainedImage;
 use time::OffsetDateTime;
@@ -511,6 +512,7 @@ impl<'a> TabView<'a> {
             });
 
             if resp.dragged_by(PointerButton::Primary) && ui.input().modifiers.command_only() {
+                ui.output().cursor_icon = CursorIcon::Grab;
                 ui.data()
                     .insert_temp(Id::new("tab_being_dragged"), (i, resp.clone()));
             }
@@ -518,6 +520,10 @@ impl<'a> TabView<'a> {
             if resp.clicked() {
                 self.state.active.replace(i);
             }
+        }
+
+        if !ui.input().modifiers.command_only() {
+            return;
         }
 
         let (id, resp) = match ui
@@ -722,6 +728,8 @@ impl<'a> ChatView<'a> {
             let resp = ui.interact(rect, id, Sense::click_and_drag());
 
             if resp.dragged_by(PointerButton::Primary) && ui.input().modifiers.shift_only() {
+                ui.output().cursor_icon = CursorIcon::Grab;
+
                 let mouse_pos = ui.input().pointer.hover_pos().unwrap();
 
                 let landing = Position::rects(cvs.image_size, self.state.state.window_size);
