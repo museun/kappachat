@@ -2,6 +2,7 @@
 
 use eframe::{NativeOptions, Storage};
 
+use egui_extras::RetainedImage;
 use kappachat::{
     helix, kappas,
     state::{AppState, PersistState},
@@ -9,6 +10,7 @@ use kappachat::{
 };
 
 const DEFAULT_PIXELS_PER_POINT: f32 = 1.0;
+const DEFAULT_IMAGE_SIZE: f32 = 32.0;
 
 fn load_settings(state: &mut PersistState, storage: &dyn Storage) {
     let mut deser = match storage
@@ -26,6 +28,9 @@ fn load_settings(state: &mut PersistState, storage: &dyn Storage) {
     state.pixels_per_point = deser.pixels_per_point;
     state.channels = deser.channels;
     state.key_mapping = deser.key_mapping;
+    state.tab_bar_image_size = deser.tab_bar_image_size;
+    state.tab_bar_position = deser.tab_bar_position;
+    state.show_image_mask = deser.show_image_mask;
 
     type Extract = for<'e> fn(&'e mut EnvConfig) -> &'e mut String;
 
@@ -56,9 +61,14 @@ fn main() -> anyhow::Result<()> {
 
     let kappas = kappas::load_kappas();
 
+    let dark_image_mask =
+        RetainedImage::from_image_bytes("dark_mask_png", kappachat::DARK_MASK_PNG)
+            .expect("load mask");
+
     let mut state = PersistState {
         env_config: EnvConfig::load_from_env(),
         pixels_per_point: DEFAULT_PIXELS_PER_POINT,
+        tab_bar_image_size: DEFAULT_IMAGE_SIZE,
         ..Default::default()
     };
 
@@ -86,7 +96,7 @@ fn main() -> anyhow::Result<()> {
                 }
             });
 
-            let state = AppState::new(cc.egui_ctx.clone(), kappas, state, helix);
+            let state = AppState::new(cc.egui_ctx.clone(), kappas, state, helix, dark_image_mask);
 
             Box::new(kappachat::App::new(cc.egui_ctx.clone(), state))
         }),

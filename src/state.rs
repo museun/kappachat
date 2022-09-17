@@ -5,14 +5,21 @@ use std::{
 
 use eframe::epaint::ahash::HashSet;
 
+use egui::Vec2;
+use egui_extras::RetainedImage;
 use poll_promise::Promise;
 use uuid::Uuid;
 
 use crate::{
-    helix, twitch,
-    widgets::{state, MainView},
+    helix,
+    store::Image,
+    twitch,
+    widgets::{
+        state::{self, ChatViewState},
+        MainView, Position,
+    },
     Channel, EnvConfig, FetchQueue, ImageCache, Interaction, KeyMapping, Queue, RequestPaint,
-    TwitchImage, UserListUpdater,
+    UserListUpdater,
 };
 
 #[derive(Default)]
@@ -51,6 +58,7 @@ pub struct State {
     pub start_state: state::StartState,
     pub main_view: state::MainViewState,
 
+    // TODO what is this
     pub view_state: ViewState,
 
     pub messages: Queue<twitch::Message>,
@@ -60,6 +68,8 @@ pub struct State {
     pub requested_images: HashSet<Uuid>,
 
     pub show_image_map: bool,
+
+    pub window_size: Vec2,
 }
 
 impl State {
@@ -73,7 +83,7 @@ impl State {
 
 pub struct Runtime {
     pub helix: Promise<helix::Client>,
-    pub fetch: FetchQueue<TwitchImage>,
+    pub fetch: FetchQueue<Image>,
     pub chatters_update: UserListUpdater,
     pub global_badges: Promise<Vec<helix::Badges>>,
     pub helix_ready: flume::Sender<helix::Client>,
@@ -85,6 +95,8 @@ pub struct AppState {
     pub interaction: Interaction,
     pub state: State,
     pub runtime: Runtime,
+
+    pub dark_image_mask: RetainedImage,
 
     pub writer: flume::Sender<String>,
     pub reader: flume::Receiver<String>,
@@ -138,7 +150,7 @@ impl AppState {
             .state
             .channels
             .iter()
-            .filter_map(|c| c.auto_join.then_some(&c.name))
+            .filter_map(|c| c.auto_join.then_some(&c.login))
         {
             self.join_channel(channel);
         }
@@ -153,6 +165,7 @@ impl AppState {
         kappas: Vec<egui_extras::RetainedImage>,
         persist: PersistState,
         helix: Promise<helix::Client>,
+        dark_image_mask: RetainedImage,
     ) -> Self {
         fn default<T: Default>() -> T {
             T::default()
@@ -167,6 +180,12 @@ impl AppState {
                 channels: persist.channels,
                 config: persist.env_config,
                 key_mapping: persist.key_mapping,
+                chat_view_state: ChatViewState {
+                    tab_bar_position: persist.tab_bar_position,
+                    image_size: persist.tab_bar_image_size,
+                    show_mask: persist.show_image_mask,
+                    ..default()
+                },
                 start_state: state::StartState::new(kappas),
                 ..default()
             },
@@ -186,6 +205,8 @@ impl AppState {
             identity: default(),
             interaction: default(),
 
+            dark_image_mask,
+
             writer,
             reader,
         }
@@ -198,6 +219,9 @@ pub struct PersistState {
     pub key_mapping: KeyMapping,
     pub channels: Vec<Channel>,
     pub pixels_per_point: f32,
+    pub tab_bar_position: Position,
+    pub tab_bar_image_size: f32,
+    pub show_image_mask: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -206,4 +230,7 @@ pub struct BorrowedPersistState<'a> {
     pub key_mapping: &'a KeyMapping,
     pub channels: &'a Vec<Channel>,
     pub pixels_per_point: &'a f32,
+    pub tab_bar_position: Position,
+    pub tab_bar_image_size: f32,
+    pub show_image_mask: bool,
 }

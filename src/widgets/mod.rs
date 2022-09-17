@@ -2,7 +2,7 @@ mod start;
 pub use start::StartView;
 
 mod main;
-pub use main::{Main, MainView};
+pub use main::{Main, MainView, Position};
 
 mod settings;
 pub use settings::{ActiveSettingsView, SettingsView};

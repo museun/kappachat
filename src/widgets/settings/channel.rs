@@ -1,10 +1,16 @@
 use std::borrow::Cow;
 
-use egui::{Align, Frame, Key, Label, Layout, RichText, ScrollArea, TextEdit, TopBottomPanel};
+use egui::{
+    vec2, Align, Frame, Key, Label, Layout, RichText, ScrollArea, TextEdit, TopBottomPanel,
+};
+use poll_promise::Promise;
 
 use crate::{
+    fetch::ImageKind,
     font_icon::{AUTOJOIN, REMOVE, TIME, USER_LIST},
-    Channel,
+    helix::{self, IdOrLogin},
+    store::Image,
+    Channel, FetchQueue, ImageCache,
 };
 
 #[derive(Default)]
@@ -12,18 +18,34 @@ pub struct TwitchChannelsState {
     showing_error: bool,
     reason: Cow<'static, str>,
     duplicate: Option<String>,
+    invalid: Option<String>,
     remove: Option<String>,
     buffer: String,
 }
 
 pub struct ChannelSettings<'a> {
     state: &'a mut TwitchChannelsState,
+    helix: &'a Promise<helix::Client>,
     channels: &'a mut Vec<Channel>,
+    images: &'a ImageCache,
+    fetch: &'a mut FetchQueue<Image>,
 }
 
 impl<'a> ChannelSettings<'a> {
-    pub fn new(state: &'a mut TwitchChannelsState, channels: &'a mut Vec<Channel>) -> Self {
-        Self { state, channels }
+    pub fn new(
+        state: &'a mut TwitchChannelsState,
+        channels: &'a mut Vec<Channel>,
+        helix: &'a Promise<helix::Client>,
+        images: &'a ImageCache,
+        fetch: &'a mut FetchQueue<Image>,
+    ) -> Self {
+        Self {
+            state,
+            channels,
+            helix,
+            images,
+            fetch,
+        }
     }
 
     pub fn display(mut self, ui: &mut egui::Ui) {
@@ -52,6 +74,10 @@ impl<'a> ChannelSettings<'a> {
                     })
                 }
 
+                if resp.changed() {
+                    self.state.invalid.take();
+                }
+
                 if resp.lost_focus() && ui.ctx().input().key_pressed(Key::Enter) {
                     self.try_add_channel(ui);
                 }
@@ -63,16 +89,35 @@ impl<'a> ChannelSettings<'a> {
             .stick_to_bottom(self.state.duplicate.is_none() || self.state.buffer.is_empty())
             .show(ui, |ui| {
                 for channel in self.channels.iter_mut() {
-                    let duplicate = self.state.duplicate.as_deref() == Some(&*channel.name);
+                    let duplicate = self.state.duplicate.as_deref() == Some(&*channel.login);
 
                     let resp = ui.horizontal(|ui| {
-                        let resp = ui.add(Label::new(
-                            RichText::new(&channel.name).monospace().color(
-                                duplicate
-                                    .then(|| ui.style().visuals.warn_fg_color)
-                                    .unwrap_or_else(|| ui.style().visuals.text_color()),
-                            ),
-                        ));
+                        let resp = ui
+                            .horizontal(|ui| {
+                                match self.images.get_id(channel.image_id) {
+                                    Some(img) => {
+                                        // TODO scale with ui
+                                        img.show_max_size(ui, vec2(16.0, 16.0));
+                                    }
+                                    None => {
+                                        self.fetch.fetch(Image {
+                                            id: channel.image_id,
+                                            url: channel.profile_image_url.clone(),
+                                            kind: ImageKind::Display,
+                                            meta: (),
+                                        });
+                                    }
+                                }
+
+                                ui.add(Label::new(
+                                    RichText::new(&channel.login).monospace().color(
+                                        duplicate
+                                            .then(|| ui.style().visuals.warn_fg_color)
+                                            .unwrap_or_else(|| ui.style().visuals.text_color()),
+                                    ),
+                                ))
+                            })
+                            .inner;
 
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                             if ui
@@ -80,7 +125,7 @@ impl<'a> ChannelSettings<'a> {
                                 .on_hover_text_at_pointer("Remove channel, leaving it")
                                 .clicked()
                             {
-                                self.state.remove.replace(channel.name.clone());
+                                self.state.remove.replace(channel.login.clone());
                             }
 
                             for (icon, description, state) in [
@@ -105,7 +150,7 @@ impl<'a> ChannelSettings<'a> {
             });
 
         if let Some(remove) = self.state.remove.take() {
-            if let Some(pos) = self.channels.iter().position(|c| c.name == remove) {
+            if let Some(pos) = self.channels.iter().position(|c| c.login == remove) {
                 self.channels.remove(pos);
             }
         }
@@ -121,13 +166,23 @@ impl<'a> ChannelSettings<'a> {
             return;
         }
 
-        let channel = std::mem::take(channel);
-        let name = match channel.starts_with('#') {
-            true => channel,
-            false => format!("#{channel}"),
+        let helix = match self.helix.ready() {
+            Some(helix) => helix,
+            None => return,
         };
 
-        self.channels.push(Channel::new(name));
+        let mut users = helix
+            .get_users([IdOrLogin::Login(&*channel)])
+            .expect("get users from twitch");
+
+        if users.is_empty() {
+            let problem = channel.clone();
+            self.report_invalid_channel(problem);
+            return;
+        }
+
+        let user = users.remove(0);
+        self.channels.push(Channel::new(user));
         std::mem::take(self.state);
     }
 
@@ -143,12 +198,16 @@ impl<'a> ChannelSettings<'a> {
             return;
         }
 
+        if self.state.invalid.is_some() {
+            return;
+        }
+
         if let Some(channel) = self
             .channels
             .iter()
-            .find(|left| Self::is_same_channel(&left.name, buf))
+            .find(|left| Self::is_same_channel(&left.login, buf))
         {
-            self.report_duplicate(channel.name.clone());
+            self.report_duplicate(channel.login.clone());
             return;
         }
 
@@ -162,13 +221,21 @@ impl<'a> ChannelSettings<'a> {
 
     fn report_duplicate(&mut self, channel: impl ToString) {
         let channel = channel.to_string();
-        self.report_error(format!("duplicate channels aren't allowed: {channel}"));
+        self.report_error(format!("Duplicate channels aren't allowed: {channel}"));
         self.state.duplicate.replace(channel);
     }
 
-    fn report_spaces(&mut self) {
-        self.report_error("cannot contain spaces");
+    fn report_invalid_channel(&mut self, channel: impl ToString) {
+        let channel = channel.to_string();
+        self.report_error(format!("Twitch doesn't have a channel for: {channel}"));
+        self.state.invalid.replace(channel);
         self.state.duplicate.take();
+    }
+
+    fn report_spaces(&mut self) {
+        self.report_error("Channels cannot contain spaces");
+        self.state.duplicate.take();
+        self.state.invalid.take();
     }
 
     fn report_error(&mut self, reason: impl Into<Cow<'static, str>>) {

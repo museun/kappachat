@@ -1,6 +1,6 @@
 use egui::ScrollArea;
 
-use crate::state::State;
+use crate::state::{AppState, State};
 
 mod channel;
 mod display;
@@ -28,11 +28,11 @@ pub struct SettingsState {
 }
 
 pub struct SettingsView<'a> {
-    state: &'a mut State,
+    state: &'a mut AppState,
 }
 
 impl<'a> SettingsView<'a> {
-    pub fn new(state: &'a mut State) -> Self {
+    pub fn new(state: &'a mut AppState) -> Self {
         Self { state }
     }
 
@@ -44,10 +44,14 @@ impl<'a> SettingsView<'a> {
         use ActiveSettingsView::*;
 
         let resp = ui.horizontal(|ui| {
-            ui.selectable_value(&mut self.state.settings.active, Channels, "Channels");
-            ui.selectable_value(&mut self.state.settings.active, KeyBindings, "Key Bindings");
-            ui.selectable_value(&mut self.state.settings.active, Twitch, "Twitch");
-            ui.selectable_value(&mut self.state.settings.active, Display, "Display");
+            ui.selectable_value(&mut self.state.state.settings.active, Channels, "Channels");
+            ui.selectable_value(
+                &mut self.state.state.settings.active,
+                KeyBindings,
+                "Key Bindings",
+            );
+            ui.selectable_value(&mut self.state.state.settings.active, Twitch, "Twitch");
+            ui.selectable_value(&mut self.state.state.settings.active, Display, "Display");
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.button("close").clicked()
@@ -60,7 +64,7 @@ impl<'a> SettingsView<'a> {
         ScrollArea::horizontal()
             .auto_shrink([false, false])
             .max_width(ui.available_width())
-            .show(ui, |ui| match self.state.settings.active {
+            .show(ui, |ui| match self.state.state.settings.active {
                 Channels => self.display_channels(ui),
                 KeyBindings => self.display_keybindings(ui),
                 Twitch => self.display_twitch(ui),
@@ -72,18 +76,33 @@ impl<'a> SettingsView<'a> {
     }
 
     fn display_channels(self, ui: &mut egui::Ui) {
-        ChannelSettings::new(&mut self.state.twitch_channels, &mut self.state.channels).display(ui);
+        ChannelSettings::new(
+            &mut self.state.state.twitch_channels,
+            &mut self.state.state.channels,
+            &self.state.runtime.helix,
+            &self.state.state.images,
+            &mut self.state.runtime.fetch,
+        )
+        .display(ui);
     }
 
     fn display_keybindings(self, ui: &mut egui::Ui) {
-        KeybindSettings::new(&mut self.state.keybind_state, &mut self.state.key_mapping).display(ui)
+        KeybindSettings::new(
+            &mut self.state.state.keybind_state,
+            &mut self.state.state.key_mapping,
+        )
+        .display(ui)
     }
 
     fn display_twitch(self, ui: &mut egui::Ui) {
-        TwitchSettings::new(&mut self.state.config, &mut self.state.twitch_settings).display(ui)
+        TwitchSettings::new(
+            &mut self.state.state.config,
+            &mut self.state.state.twitch_settings,
+        )
+        .display(ui)
     }
 
     fn display_display(self, ui: &mut egui::Ui) {
-        DisplaySettings::new(self.state).display(ui)
+        DisplaySettings::new(&mut self.state.state, &self.state.dark_image_mask).display(ui)
     }
 }

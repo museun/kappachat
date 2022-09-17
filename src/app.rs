@@ -1,12 +1,10 @@
-use std::collections::BTreeMap;
-
-use egui::{vec2, Grid, ScrollArea, Window};
 use egui_extras::RetainedImage;
 
 use crate::{
     state::{AppState, BorrowedPersistState},
+    store::{Image, ImageStore},
     widgets::{Main, MainView},
-    Channel, TwitchImage, SETTINGS_KEY,
+    Channel, FetchImage, SETTINGS_KEY,
 };
 
 pub struct App {
@@ -34,7 +32,7 @@ impl App {
         let name = match self.find_active_channel() {
             Some(channel) => {
                 channel.show_user_list = !channel.show_user_list;
-                channel.name.clone()
+                channel.login.clone()
             }
             _ => return,
         };
@@ -58,7 +56,7 @@ impl App {
             .state
             .channels
             .iter_mut()
-            .find(|c| c.name == active.name())
+            .find(|c| c.login == active.name())
     }
 
     fn next_tab(&mut self) {
@@ -103,45 +101,46 @@ impl App {
         ];
 
         // if we have all of the desired badges already, do nothing
-        if DESIRED_USER_LIST_BADGES
-            .into_iter()
-            .fold(true, |ok, key| ok & self.app.state.images.has(key))
+        if true
+        //  DESIRED_USER_LIST_BADGES
+        // .into_iter()
+        // .fold(true, |ok, key| ok & self.app.state.images.has(key))
         {
             return;
         }
 
-        let badges = match self.app.runtime.global_badges.ready() {
-            Some(badges) => badges,
-            None => {
-                let helix = match self.app.runtime.helix.ready() {
-                    Some(helix) => helix,
-                    None => return,
-                };
+        // let badges = match self.app.runtime.global_badges.ready() {
+        //     Some(badges) => badges,
+        //     None => {
+        //         let helix = match self.app.runtime.helix.ready() {
+        //             Some(helix) => helix,
+        //             None => return,
+        //         };
 
-                let _ = self.app.runtime.helix_ready.send(helix.clone());
-                return;
-            }
-        };
+        //         let _ = self.app.runtime.helix_ready.send(helix.clone());
+        //         return;
+        //     }
+        // };
 
-        for (set_id, (id, url)) in badges.iter().flat_map(|badge| {
-            std::iter::repeat(&badge.set_id)
-                .zip(badge.versions.iter().map(|v| (&v.id, &v.image_url_4x)))
-        }) {
-            if !DESIRED_USER_LIST_BADGES.contains(&&**set_id) {
-                continue;
-            }
+        // for (set_id, (id, url)) in badges.iter().flat_map(|badge| {
+        //     std::iter::repeat(&badge.set_id)
+        //         .zip(badge.versions.iter().map(|v| (&v.id, &v.image_url_4x)))
+        // }) {
+        //     if !DESIRED_USER_LIST_BADGES.contains(&&**set_id) {
+        //         continue;
+        //     }
 
-            let badge = TwitchImage::badge(id, &set_id, url);
-            if self.app.state.images.has_id(badge.id()) {
-                continue;
-            }
+        //     let badge = TwitchImage::badge(id, &set_id, url);
+        //     if self.app.state.images.has_id(badge.id()) {
+        //         continue;
+        //     }
 
-            if !self.app.state.requested_images.insert(badge.id()) {
-                continue;
-            }
+        //     if !self.app.state.requested_images.insert(badge.id()) {
+        //         continue;
+        //     }
 
-            self.app.runtime.fetch.fetch(badge);
-        }
+        //     self.app.runtime.fetch.fetch(badge);
+        // }
     }
 
     fn try_fetch_image(&mut self) {
@@ -151,20 +150,23 @@ impl App {
         };
 
         let images = &mut self.app.state.images;
-        if images.has_id(image.id()) {
+        if images.has_id(image.id) {
             return;
         }
 
-        match RetainedImage::from_image_bytes(image.name(), &data) {
-            Ok(data) => {
-                images.add(image.name(), image.id(), data);
-                let _ = self.app.state.requested_images.remove(&image.id());
+        match RetainedImage::from_image_bytes(image.url(), &data) {
+            Ok(img) => {
+                images.add(image.id, img);
+                let _ = self.app.state.requested_images.remove(&image.id);
+                ImageStore::<Image>::add(&image, &(), &data);
             }
             Err(err) => {
-                eprintln!("cannot create ({}) {} : {err}", image.id(), image.name())
+                eprintln!("cannot create ({}) {} : {err}", image.id, image.url())
             }
         }
     }
+
+    fn try_update_images(&mut self) {}
 
     fn try_poll_twitch(&mut self) {
         let twitch = match &self.app.twitch {
@@ -226,36 +228,35 @@ impl App {
 
         active.push_privmsg(id, spans, msg.clone());
 
-        for (emote, _) in pm.emotes() {
-            if self.app.state.images.has(emote) {
-                continue;
-            }
+        // for (emote, _) in pm.emotes() {
+        //     if self.app.state.images.has(emote) {
+        //         continue;
+        //     }
 
-            let name = match self.app.state.emote_map.get(emote) {
-                Some(name) => name,
-                None => {
-                    eprintln!("emote missing: {emote}");
-                    continue;
-                }
-            };
+        //     let name = match self.app.state.emote_map.get(emote) {
+        //         Some(name) => name,
+        //         None => {
+        //             eprintln!("emote missing: {emote}");
+        //             continue;
+        //         }
+        //     };
 
-            // TODO also fetch the light one
-            self.app.runtime.fetch.fetch(TwitchImage::emote(
-                &emote,
-                &name,
-                format!("https://static-cdn.jtvnw.net/emoticons/v2/{emote}/static/dark/3.0"),
-            ))
-        }
+        //     // TODO also fetch the light one
+        //     // TODO this returns whether its fetching it or not
+        //     self.app.runtime.fetch.fetch(TwitchImage::emote(
+        //         &emote,
+        //         &name,
+        //         format!("https://static-cdn.jtvnw.net/emoticons/v2/{emote}/static/dark/3.0"),
+        //     ));
+        // }
     }
 
     fn try_handle_user_input(&mut self) {
         if let Ok(msg) = self.app.reader.try_recv() {
             if let Some(ch) = self.app.state.chat_view_state.active() {
-                let _ = self.app.interaction.send_raw(format!(
-                    "PRIVMSG {} :{}\r\n",
-                    ch.name(),
-                    msg.trim()
-                ));
+                self.app
+                    .interaction
+                    .send_raw(format!("PRIVMSG {} :{}\r\n", ch.name(), msg.trim()));
             }
         }
     }
@@ -322,48 +323,82 @@ impl App {
 }
 
 impl eframe::App for App {
-    fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        // TODO diff this?
+        self.app.state.window_size = frame.info().window_info.size;
+
         self.try_poll_twitch();
         self.try_fetch_badges();
         self.try_fetch_chatters();
         self.try_fetch_image();
+        self.try_update_images();
         self.try_read_message();
         self.try_handle_user_input();
         self.try_handle_key_press();
 
-        Window::new("image cache")
-            .open(&mut self.app.state.show_image_map)
-            .show(&self.context, |ui| {
-                ScrollArea::vertical().show(ui, |ui| {
-                    if !self.app.state.requested_images.is_empty() {
-                        ui.group(|ui| {
-                            ui.label("requested images");
-                            ui.vertical(|ui| {
-                                let mut ids =
-                                    self.app.state.requested_images.iter().collect::<Vec<_>>();
-                                ids.sort();
+        // Window::new("image cache")
+        //     .open(&mut self.app.state.show_image_map)
+        //     .show(&self.context, |ui| {
+        //         ui.vertical(|ui| {
+        //             CollapsingHeader::new("image cache")
+        //                 .default_open(false)
+        //                 .show(ui, |ui| {
+        //                     ScrollArea::vertical().show(ui, |ui| {
+        //                         if !self.app.state.requested_images.is_empty() {
+        //                             ui.group(|ui| {
+        //                                 ui.label("requested images");
+        //                                 ui.vertical(|ui| {
+        //                                     let mut ids = self
+        //                                         .app
+        //                                         .state
+        //                                         .requested_images
+        //                                         .iter()
+        //                                         .collect::<Vec<_>>();
+        //                                     ids.sort();
 
-                                for id in ids {
-                                    ui.monospace(id.to_string());
-                                }
-                            })
-                        });
-                    }
+        //                                     for id in ids {
+        //                                         ui.monospace(id.to_string());
+        //                                     }
+        //                                 })
+        //                             });
+        //                         }
 
-                    Grid::new("image_map").num_columns(3).show(ui, |ui| {
-                        for (id, img) in
-                            self.app.state.images.map.iter().collect::<BTreeMap<_, _>>()
-                        {
-                            img.show_size(ui, vec2(16.0, 16.0));
-                            ui.label(img.debug_name());
-                            ui.monospace(id.to_string());
-                            ui.end_row()
-                        }
-                    });
-                })
-            });
+        //                         Grid::new("image_map").num_columns(3).show(ui, |ui| {
+        //                             for (id, img) in
+        //                                 self.app.state.images.map.iter().collect::<BTreeMap<_, _>>()
+        //                             {
+        //                                 img.show_size(ui, vec2(16.0, 16.0));
+        //                                 ui.label(img.debug_name());
+        //                                 ui.monospace(id.to_string());
+        //                                 ui.end_row()
+        //                             }
+        //                         });
+        //                     });
+        //                 });
 
-        egui::CentralPanel::default().show(ctx, |ui| Main::new(&mut self.app).display(ui));
+        //             CollapsingHeader::new("disk cache")
+        //                 .default_open(false)
+        //                 .show(ui, |ui| {
+        //                     // TODO cache this
+        //                     ScrollArea::vertical().show(ui, |ui| {
+        //                         for image in ImageStore::<Image>::get_all_debug() {
+        //                             Grid::new(image.image.id).num_columns(2).show(ui, |ui| {
+        //                                 ui.monospace(image.image.id.to_string());
+        //                                 if let Some(img) =
+        //                                     self.app.state.images.get_id(image.image.id)
+        //                                 {
+        //                                     img.show_max_size(ui, vec2(32.0, 32.0));
+        //                                 }
+
+        //                                 ui.end_row()
+        //                             });
+        //                         }
+        //                     });
+        //                 });
+        //         });
+        //     });
+
+        Main::new(&mut self.app).display(ctx)
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
@@ -372,6 +407,9 @@ impl eframe::App for App {
             key_mapping: &self.app.state.key_mapping,
             channels: &self.app.state.channels,
             pixels_per_point: &self.app.state.pixels_per_point,
+            tab_bar_position: self.app.state.chat_view_state.tab_bar_position,
+            tab_bar_image_size: self.app.state.chat_view_state.image_size,
+            show_image_mask: self.app.state.chat_view_state.show_mask,
         };
 
         let json = serde_json::to_string(&data).expect("valid json");

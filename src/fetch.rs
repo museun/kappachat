@@ -1,97 +1,86 @@
-use std::borrow::Cow;
+use std::{collections::HashSet, hash::Hash};
 
 use uuid::Uuid;
 
-use crate::{RequestPaint, TaskQueue};
+use crate::{
+    store::{Image, ImageStore},
+    RequestPaint, TaskQueue,
+};
 
-pub trait FetchUrl {
-    fn url(&self) -> Cow<'_, str>;
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd, Eq, Ord, Hash)]
+pub enum ImageKind {
+    Emote = 0,
+    Badge = 1,
+    Display = 2,
 }
 
-#[derive(Clone, Debug, PartialEq, PartialOrd, Eq, Ord, Hash)]
-pub struct TwitchImage {
-    id: Uuid,
-    url: String,
-    kind: TwitchImageKind,
-}
+impl ImageKind {
+    pub const fn to_tag(self) -> u8 {
+        self as _
+    }
 
-impl TwitchImage {
-    pub fn emote(id: impl ToString, name: impl ToString, url: impl ToString) -> Self {
-        Self {
-            id: Uuid::new_v4(),
-            url: url.to_string(),
-            kind: TwitchImageKind::Emote {
-                id: id.to_string(),
-                name: name.to_string(),
-            },
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Emote => "Emote",
+            Self::Badge => "Badge",
+            Self::Display => "Display",
         }
     }
 
-    pub fn badge(id: impl ToString, set_id: impl ToString, url: impl ToString) -> Self {
-        let url = url.to_string();
-        let uuid = Self::extract_uuid(&url).expect("uuid in url");
-        Self {
-            id: uuid,
-            url,
-            kind: TwitchImageKind::Badge {
-                id: id.to_string(),
-                set_id: set_id.to_string(),
-            },
-        }
-    }
-
-    fn extract_uuid(input: &str) -> Option<uuid::Uuid> {
-        static PATTERN: once_cell::sync::Lazy<regex::Regex> = once_cell::sync::Lazy::new(|| {
-            const PATTERN: &str =
-                r#"^.*?(?P<uuid>[A-Fa-f0-9]{8}-(?:[A-Fa-f0-9]{4}-){3}[A-Fa-f0-9]{12}).*?$"#;
-            regex::Regex::new(PATTERN).unwrap()
-        });
-
-        PATTERN.captures(input)?.name("uuid")?.as_str().parse().ok()
-    }
-
-    pub const fn id(&self) -> uuid::Uuid {
-        self.id
-    }
-
-    pub fn name(&self) -> &str {
-        use TwitchImageKind::*;
-        match &self.kind {
-            Emote { id: name, .. } | Badge { set_id: name, .. } => name,
-        }
+    pub const fn from_tag(id: u8) -> Option<Self> {
+        Some(match id {
+            0 => Self::Emote,
+            1 => Self::Badge,
+            2 => Self::Display,
+            _ => return None,
+        })
     }
 }
 
-#[derive(Clone, Debug, PartialEq, PartialOrd, Eq, Ord, Hash)]
-pub enum TwitchImageKind {
-    Emote { id: String, name: String },
-    Badge { id: String, set_id: String },
+pub trait FetchImage {
+    fn id(&self) -> Uuid;
+    fn url(&self) -> &str;
+    fn kind(&self) -> ImageKind;
 }
 
-impl FetchUrl for TwitchImage {
-    fn url(&self) -> Cow<'_, str> {
-        (&*self.url).into()
-    }
+fn extract_uuid(input: &str) -> Option<uuid::Uuid> {
+    static PATTERN: once_cell::sync::Lazy<regex::Regex> = once_cell::sync::Lazy::new(|| {
+        const PATTERN: &str =
+            r#"^.*?(?P<uuid>[A-Fa-f0-9]{8}-(?:[A-Fa-f0-9]{4}-){3}[A-Fa-f0-9]{12}).*?$"#;
+        regex::Regex::new(PATTERN).unwrap()
+    });
+
+    PATTERN.captures(input)?.name("uuid")?.as_str().parse().ok()
 }
 
-pub struct FetchQueue<I> {
+pub struct FetchQueue<I>
+where
+    I: FetchImage,
+{
     queue: TaskQueue<I>,
+    seen: HashSet<Uuid>,
 }
 
 impl<I> FetchQueue<I>
 where
     I: Send + Sync + 'static,
-    I: FetchUrl,
-    I: std::fmt::Debug,
+    I: FetchImage + std::fmt::Debug,
 {
     pub fn create(repaint: impl RequestPaint + 'static) -> Self {
         Self {
             queue: TaskQueue::new(repaint, Self::spawn),
+            seen: HashSet::new(),
         }
     }
 
-    pub fn fetch(&self, item: I) {
-        self.queue.enqueue(item)
+    pub fn fetch(&mut self, item: I) -> bool {
+        if !self.seen.insert(item.id()) {
+            return false;
+        }
+
+        self.queue.enqueue(item);
+        true
     }
 
     pub fn try_next(&self) -> Option<(I, Vec<u8>)> {
@@ -120,7 +109,14 @@ where
 
         let agent = ureq::agent();
         for item in queue {
-            let mut body = match fetch(&agent, &*item.url()) {
+            if let Some(img) = ImageStore::<Image>::get::<()>(item.id()) {
+                let _ = ready.send((item, img.data.to_vec()));
+                continue;
+            }
+
+            eprintln!("sending req for {}", item.id());
+
+            let mut body = match fetch(&agent, item.url()) {
                 Ok(body) => body,
                 _ => {
                     eprintln!("cannot fetch: {item:?}");
@@ -132,7 +128,6 @@ where
             let mut data = vec![];
             let _ = body.read_to_end(&mut data);
             let _ = ready.send((item, data));
-
             repaint.request_repaint();
         }
 

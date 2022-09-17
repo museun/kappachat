@@ -1,5 +1,18 @@
 use std::{collections::HashMap, sync::Arc};
 
+use uuid::Uuid;
+
+pub struct Channel {
+    pub id: u64,
+    pub login: String,
+
+    pub display_name: String,
+    pub description: String,
+
+    pub image_id: Uuid,
+    pub profile_image_url: String,
+}
+
 #[derive(Debug, Default)]
 pub struct Chatters {
     pub count: usize,
@@ -87,6 +100,21 @@ impl OAuth {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct User {
+    pub created_at: String,
+    pub description: String,
+    pub display_name: String,
+    pub id: String,
+    pub login: String,
+    pub profile_image_url: String,
+}
+
+pub enum IdOrLogin<'a> {
+    Id(&'a str),
+    Login(&'a str),
+}
+
 #[derive(Clone)]
 pub struct Client {
     oauth: Arc<OAuth>,
@@ -108,6 +136,20 @@ impl Client {
         .into_string()?;
 
         Self::chatters_json(&resp)
+    }
+
+    pub fn get_users<'a>(
+        &self,
+        logins: impl IntoIterator<Item = IdOrLogin<'a>>,
+    ) -> anyhow::Result<Vec<User>> {
+        // TODO split on 100 query-pair boundaries
+        self.get_response(
+            "users",
+            logins.into_iter().map(|input| match input {
+                IdOrLogin::Id(id) => ("id", id),
+                IdOrLogin::Login(login) => ("login", login.strip_prefix('#').unwrap_or(login)),
+            }),
+        )
     }
 
     pub fn get_emotes(&self) -> anyhow::Result<Vec<Emotes>> {

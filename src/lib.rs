@@ -41,10 +41,15 @@ pub mod widgets;
 pub use app::App;
 pub use channel::Channel;
 pub use config::EnvConfig;
-pub use fetch::{FetchQueue, FetchUrl, TwitchImage};
+pub use fetch::{FetchImage, FetchQueue};
 pub use image_cache::ImageCache;
 pub use interaction::Interaction;
 pub use key_mapping::{Chord, KeyAction, KeyHelper, KeyMapping};
 pub use queue::Queue;
 pub use task_queue::TaskQueue;
 use user_list_updater::UserListUpdater;
+
+mod store;
+
+// TODO make a light version of this mask
+pub const DARK_MASK_PNG: &[u8] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/mask.png"));
