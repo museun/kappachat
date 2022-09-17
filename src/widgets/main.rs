@@ -685,19 +685,15 @@ impl TabBar {
 
         let id = Id::new(hash_source);
 
+        // TODO enable scroll but disable scroll bars
         let resp = match (self.side.as_side(), self.side.as_top_bottom()) {
             (None, Some(top_bottom)) => {
                 TopBottomPanel::new(top_bottom, id.with("tab_bar"))
                     .resizable(false)
                     .frame(frame)
                     .height_range(range)
-                    // TODO ScrollArea
                     .show(ctx, |ui| {
-                        // ScrollArea::horizontal()
-                        // .auto_shrink([false, false])
-                        // .show(ui, |ui| {
                         ui.horizontal(body);
-                        // })
                     })
                     .response
             }
@@ -706,13 +702,8 @@ impl TabBar {
                     .resizable(false)
                     .frame(frame)
                     .width_range(range)
-                    // TODO ScrollArea
                     .show(ctx, |ui| {
-                        // ScrollArea::vertical()
-                        // .auto_shrink([false, false])
-                        // .show(ui, |ui| {
                         ui.vertical(body);
-                        // })
                     })
                     .response
             }
